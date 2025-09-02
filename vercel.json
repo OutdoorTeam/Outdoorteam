@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "builds": [{ "src": "client/index.html", "use": "@vercel/static-build" }],
+  "routes": [
+    { "src": "/favicon\\.ico", "dest": "/favicon.ico" },
+    { "src": "/robots\\.txt", "dest": "/robots.txt" },
+    { "src": "/(icon-\\d+\\.png)", "dest": "/$1" },
+    { "src": "/(site\\.webmanifest|manifest\\.json)", "dest": "/$1" },
+    { "src": "/assets/(.*)", "dest": "/assets/$1" },
+    { "src": "/sw\\.js", "dest": "/sw.js" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ],
+  "env": {
+    "VITE_API_URL": "@VITE_API_URL"
+  }
+}
