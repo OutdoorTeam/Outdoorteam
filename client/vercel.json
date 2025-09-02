@@ -1,5 +1,11 @@
 {
   "version": 2,
   "builds": [{ "src": "index.html", "use": "@vercel/static-build" }],
-  "routes": [{ "src": "/(.*)", "dest": "/index.html" }]
+  "routes": [
+    {
+      "src": "/(assets/.*|favicon\\.ico|robots\\.txt|site\\.webmanifest|manifest\\.json|apple-touch-icon\\.png)",
+      "dest": "/$1"
+    },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ]
 }
