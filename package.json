@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "build": "vite build && tsc --project tsconfig.server.json",
-    "start": "tsx watch scripts/dev.ts",
+    "build:server": "tsc -p tsconfig.server.json",
+    "render-build": "npm run build:server",
+    "start": "node dist/server/server/index.js",
     "generate-vapid": "node scripts/generate-vapid.js"
   },
   "dependencies": {

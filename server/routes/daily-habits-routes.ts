@@ -1,8 +1,10 @@
 import { Router } from 'express';
 import { db } from '../database.js';
 import { authenticateToken } from '../middleware/auth.js';
-import { sendErrorResponse, ERROR_CODES } from '../utils/validation.js';
+import { sendErrorResponse, ERROR_CODES, validateRequest } from '../utils/validation.js';
 import { SystemLogger } from '../utils/logging.js';
+import { DailyHabitInsert } from '../types/daily-habits.js';
+import { DailyHabitInsertSchema } from '../utils/schemas.js';
 
 const router = Router();
 
@@ -23,23 +25,24 @@ router.get('/daily-habits/today', authenticateToken, async (req: any, res) => {
 
     if (!todayHabits) {
       // Create default record for today
+      const payload: DailyHabitInsert = {
+        user_id: userId,
+        date: today,
+        training_completed: 0,
+        nutrition_completed: 0,
+        movement_completed: 0,
+        meditation_completed: 0,
+        daily_points: 0,
+        steps: 0,
+      };
+
       todayHabits = await db
         .insertInto('daily_habits')
-        .values({
-          user_id: userId,
-          date: today,
-          training_completed: 0,
-          nutrition_completed: 0,
-          movement_completed: 0,
-          meditation_completed: 0,
-          daily_points: 0,
-          steps: 0,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
+        .values(payload)
         .returning([
-          'id', 'user_id', 'date', 'training_completed', 'nutrition_completed', 
-          'movement_completed', 'meditation_completed', 'daily_points', 'steps'
+          'id', 'user_id', 'date', 'training_completed', 'nutrition_completed',
+          'movement_completed', 'meditation_completed', 'daily_points', 'steps',
+          'created_at', 'updated_at'
         ])
         .executeTakeFirst();
     }
@@ -119,98 +122,70 @@ router.get('/daily-habits/calendar', authenticateToken, async (req: any, res) =>
 });
 
 // Update daily habits
-router.put('/daily-habits/update', authenticateToken, async (req: any, res) => {
-  try {
-    const userId = req.user.id;
-    const { 
-      date, 
-      training_completed, 
-      nutrition_completed, 
-      movement_completed, 
-      meditation_completed, 
-      steps 
-    } = req.body;
-    
-    console.log('Updating daily habits for user:', userId, 'date:', date, 'data:', req.body);
+router.put(
+  '/daily-habits/update',
+  authenticateToken,
+  validateRequest(DailyHabitInsertSchema, 'body'),
+  async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const payload = req.body as DailyHabitInsert;
+      payload.user_id = userId;
 
-    if (!date) {
-      sendErrorResponse(res, ERROR_CODES.VALIDATION_ERROR, 'Fecha requerida');
-      return;
-    }
+      console.log('Updating daily habits for user:', userId, 'date:', payload.date, 'data:', payload);
 
-    // Get current record or create new one
-    let currentHabits = await db
-      .selectFrom('daily_habits')
-      .selectAll()
-      .where('user_id', '=', userId)
-      .where('date', '=', date)
-      .executeTakeFirst();
+      // Recalculate daily points based on completed habits
+      payload.daily_points =
+        payload.training_completed +
+        payload.nutrition_completed +
+        payload.movement_completed +
+        payload.meditation_completed;
 
-    const updateData: any = {
-      updated_at: new Date().toISOString()
-    };
-
-    // Update fields that were provided
-    if (training_completed !== undefined) updateData.training_completed = training_completed ? 1 : 0;
-    if (nutrition_completed !== undefined) updateData.nutrition_completed = nutrition_completed ? 1 : 0;
-    if (movement_completed !== undefined) updateData.movement_completed = movement_completed ? 1 : 0;
-    if (meditation_completed !== undefined) updateData.meditation_completed = meditation_completed ? 1 : 0;
-    if (steps !== undefined) updateData.steps = steps;
-
-    // Calculate points based on completed habits
-    const habitsToCheck = {
-      training_completed: training_completed !== undefined ? (training_completed ? 1 : 0) : (currentHabits?.training_completed || 0),
-      nutrition_completed: nutrition_completed !== undefined ? (nutrition_completed ? 1 : 0) : (currentHabits?.nutrition_completed || 0),
-      movement_completed: movement_completed !== undefined ? (movement_completed ? 1 : 0) : (currentHabits?.movement_completed || 0),
-      meditation_completed: meditation_completed !== undefined ? (meditation_completed ? 1 : 0) : (currentHabits?.meditation_completed || 0)
-    };
-
-    const dailyPoints = Object.values(habitsToCheck).reduce((sum, completed) => sum + completed, 0);
-    updateData.daily_points = dailyPoints;
-
-    let result;
-    if (currentHabits) {
-      // Update existing record
-      result = await db
-        .updateTable('daily_habits')
-        .set(updateData)
+      const currentHabits = await db
+        .selectFrom('daily_habits')
+        .selectAll()
         .where('user_id', '=', userId)
-        .where('date', '=', date)
-        .returning([
-          'id', 'user_id', 'date', 'training_completed', 'nutrition_completed',
-          'movement_completed', 'meditation_completed', 'daily_points', 'steps'
-        ])
+        .where('date', '=', payload.date)
         .executeTakeFirst();
-    } else {
-      // Create new record
-      result = await db
-        .insertInto('daily_habits')
-        .values({
-          user_id: userId,
-          date: date,
-          training_completed: updateData.training_completed || 0,
-          nutrition_completed: updateData.nutrition_completed || 0,
-          movement_completed: updateData.movement_completed || 0,
-          meditation_completed: updateData.meditation_completed || 0,
-          daily_points: dailyPoints,
-          steps: updateData.steps || 0,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .returning([
-          'id', 'user_id', 'date', 'training_completed', 'nutrition_completed',
-          'movement_completed', 'meditation_completed', 'daily_points', 'steps'
-        ])
-        .executeTakeFirst();
-    }
 
-    console.log('Daily habits updated successfully:', result);
-    res.json(result);
-  } catch (error) {
-    console.error('Error updating daily habits:', error);
-    await SystemLogger.logCriticalError('Daily habits update error', error as Error, { userId: req.user?.id });
-    sendErrorResponse(res, ERROR_CODES.SERVER_ERROR, 'Error al actualizar hábitos diarios');
+      let result;
+      if (currentHabits) {
+        result = await db
+          .updateTable('daily_habits')
+          .set({
+            training_completed: payload.training_completed,
+            nutrition_completed: payload.nutrition_completed,
+            movement_completed: payload.movement_completed,
+            meditation_completed: payload.meditation_completed,
+            daily_points: payload.daily_points,
+            steps: payload.steps,
+          })
+          .where('user_id', '=', userId)
+          .where('date', '=', payload.date)
+          .returning([
+            'id', 'user_id', 'date', 'training_completed', 'nutrition_completed',
+            'movement_completed', 'meditation_completed', 'daily_points', 'steps'
+          ])
+          .executeTakeFirst();
+      } else {
+        result = await db
+          .insertInto('daily_habits')
+          .values(payload)
+          .returning([
+            'id', 'user_id', 'date', 'training_completed', 'nutrition_completed',
+            'movement_completed', 'meditation_completed', 'daily_points', 'steps'
+          ])
+          .executeTakeFirst();
+      }
+
+      console.log('Daily habits updated successfully:', result);
+      res.json(result);
+    } catch (error) {
+      console.error('Error updating daily habits:', error);
+      await SystemLogger.logCriticalError('Daily habits update error', error as Error, { userId: req.user?.id });
+      sendErrorResponse(res, ERROR_CODES.SERVER_ERROR, 'Error al actualizar hábitos diarios');
+    }
   }
-});
+);
 
 export default router;
