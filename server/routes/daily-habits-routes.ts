@@ -1,13 +1,21 @@
-import { Router } from 'express';
-import { db } from '../database.js';
+import { Router, type Request } from 'express';
+import { db, type DatabaseSchema } from '../database.js';
 import { authenticateToken } from '../middleware/auth.js';
-import { sendErrorResponse, ERROR_CODES } from '../utils/validation.js';
+import { sendErrorResponse, ERROR_CODES, validateRequest } from '../utils/validation.js';
 import { SystemLogger } from '../utils/logging.js';
+import { z } from 'zod';
+import { dailyHabitsUpdateSchema } from '../../shared/validation-schemas.js';
+
+interface AuthenticatedRequest<T = unknown> extends Request<{}, {}, T> {
+  user: { id: number };
+}
+
+type DailyHabitsUpdateBody = z.infer<typeof dailyHabitsUpdateSchema>;
 
 const router = Router();
 
 // Get today's habits for the authenticated user
-router.get('/daily-habits/today', authenticateToken, async (req: any, res) => {
+router.get('/daily-habits/today', authenticateToken, async (req: AuthenticatedRequest, res) => {
   try {
     const userId = req.user.id;
     const today = new Date().toISOString().split('T')[0];
@@ -38,8 +46,9 @@ router.get('/daily-habits/today', authenticateToken, async (req: any, res) => {
           updated_at: new Date().toISOString()
         })
         .returning([
-          'id', 'user_id', 'date', 'training_completed', 'nutrition_completed', 
-          'movement_completed', 'meditation_completed', 'daily_points', 'steps'
+          'id', 'user_id', 'date', 'training_completed', 'nutrition_completed',
+          'movement_completed', 'meditation_completed', 'daily_points', 'steps',
+          'created_at', 'updated_at'
         ])
         .executeTakeFirst();
     }
@@ -54,7 +63,7 @@ router.get('/daily-habits/today', authenticateToken, async (req: any, res) => {
 });
 
 // Get weekly points for the authenticated user
-router.get('/daily-habits/weekly-points', authenticateToken, async (req: any, res) => {
+router.get('/daily-habits/weekly-points', authenticateToken, async (req: AuthenticatedRequest, res) => {
   try {
     const userId = req.user.id;
     const today = new Date();
@@ -90,7 +99,7 @@ router.get('/daily-habits/weekly-points', authenticateToken, async (req: any, re
 });
 
 // Get calendar data for the authenticated user
-router.get('/daily-habits/calendar', authenticateToken, async (req: any, res) => {
+router.get('/daily-habits/calendar', authenticateToken, async (req: AuthenticatedRequest, res) => {
   try {
     const userId = req.user.id;
     const today = new Date();
@@ -119,7 +128,10 @@ router.get('/daily-habits/calendar', authenticateToken, async (req: any, res) =>
 });
 
 // Update daily habits
-router.put('/daily-habits/update', authenticateToken, async (req: any, res) => {
+router.put('/daily-habits/update',
+  authenticateToken,
+  validateRequest(dailyHabitsUpdateSchema),
+  async (req: AuthenticatedRequest<DailyHabitsUpdateBody>, res) => {
   try {
     const userId = req.user.id;
     const { 
@@ -146,7 +158,7 @@ router.put('/daily-habits/update', authenticateToken, async (req: any, res) => {
       .where('date', '=', date)
       .executeTakeFirst();
 
-    const updateData: any = {
+    const updateData: Partial<DatabaseSchema['daily_habits']> = {
       updated_at: new Date().toISOString()
     };
 
@@ -168,7 +180,7 @@ router.put('/daily-habits/update', authenticateToken, async (req: any, res) => {
     const dailyPoints = Object.values(habitsToCheck).reduce((sum, completed) => sum + completed, 0);
     updateData.daily_points = dailyPoints;
 
-    let result;
+    let result: DatabaseSchema['daily_habits'] | undefined;
     if (currentHabits) {
       // Update existing record
       result = await db
@@ -178,7 +190,8 @@ router.put('/daily-habits/update', authenticateToken, async (req: any, res) => {
         .where('date', '=', date)
         .returning([
           'id', 'user_id', 'date', 'training_completed', 'nutrition_completed',
-          'movement_completed', 'meditation_completed', 'daily_points', 'steps'
+          'movement_completed', 'meditation_completed', 'daily_points', 'steps',
+          'created_at', 'updated_at'
         ])
         .executeTakeFirst();
     } else {
@@ -199,7 +212,8 @@ router.put('/daily-habits/update', authenticateToken, async (req: any, res) => {
         })
         .returning([
           'id', 'user_id', 'date', 'training_completed', 'nutrition_completed',
-          'movement_completed', 'meditation_completed', 'daily_points', 'steps'
+          'movement_completed', 'meditation_completed', 'daily_points', 'steps',
+          'created_at', 'updated_at'
         ])
         .executeTakeFirst();
     }
