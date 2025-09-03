@@ -1,4 +1,4 @@
-import { Kysely, SqliteDialect } from 'kysely';
+import { Kysely, SqliteDialect, Generated, ColumnType } from 'kysely';
 import Database from 'better-sqlite3';
 import path from 'path';
 
@@ -24,7 +24,7 @@ export interface DatabaseSchema {
     created_at: string;
   };
   daily_habits: {
-    id: number;
+    id: Generated<number>;
     user_id: number;
     date: string;
     training_completed: number;
@@ -33,8 +33,8 @@ export interface DatabaseSchema {
     meditation_completed: number;
     daily_points: number;
     steps: number;
-    created_at: string;
-    updated_at: string;
+    created_at: ColumnType<string, string | undefined>;
+    updated_at: ColumnType<string, string | undefined>;
   };
   daily_history: {
     id: number;
