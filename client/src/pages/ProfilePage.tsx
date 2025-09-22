@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserStats } from '@/hooks/api/use-user-stats';
 import WeeklyPointsChart from '@/components/profile/WeeklyPointsChart';
@@ -12,17 +13,22 @@ import MonthlyHabitsChart from '@/components/profile/MonthlyHabitsChart';
 import HabitCompletionDonut from '@/components/profile/HabitCompletionDonut';
 import StatsSummary from '@/components/profile/StatsSummary';
 import NotificationSettings from '@/components/profile/NotificationSettings';
-import { User, Mail, Calendar, Crown, Star, Activity, BarChart3, Bell, KeyRound } from 'lucide-react';
+import AvatarDisplay from '@/components/profile/AvatarDisplay';
+import AvatarEditor from '@/components/profile/AvatarEditor';
+import { useAvatar } from '@/hooks/api/use-avatar';
+import { User, Mail, Calendar, Crown, Star, Activity, BarChart3, Bell, KeyRound, Edit } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, parseApiError, getErrorMessage } from '@/utils/error-handling';
 
 const ProfilePage: React.FC = () => {
   const { user, refreshUser } = useAuth();
   const { data: userStats, isLoading: statsLoading, error: statsError } = useUserStats(user?.id || 0);
+  const { data: avatar, isLoading: avatarLoading, error: avatarError } = useAvatar();
   const { toast } = useToast();
   const [password, setPassword] = React.useState('');
   const [confirmPassword, setConfirmPassword] = React.useState('');
   const [isUpdatingPassword, setIsUpdatingPassword] = React.useState(false);
+  const [isEditorOpen, setIsEditorOpen] = React.useState(false);
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,14 +89,18 @@ const ProfilePage: React.FC = () => {
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">Mi Perfil</h1>
-        <p className="text-muted-foreground">Información de tu cuenta, estadísticas y configuración</p>
+        <p className="text-muted-foreground">Información de tu cuenta, avatar, estadísticas y configuración</p>
       </div>
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="profile" className="flex items-center gap-2">
             <User className="w-4 h-4" />
-            Información Personal
+            Información
+          </TabsTrigger>
+          <TabsTrigger value="avatar" className="flex items-center gap-2">
+            <User className="w-4 h-4" />
+            Avatar
           </TabsTrigger>
           <TabsTrigger value="statistics" className="flex items-center gap-2">
             <BarChart3 className="w-4 h-4" />
@@ -204,6 +214,45 @@ const ProfilePage: React.FC = () => {
               </Card>
             </div>
           </div>
+        </TabsContent>
+
+        <TabsContent value="avatar">
+          <Card>
+            <CardHeader>
+              <CardTitle>Mi Avatar</CardTitle>
+              <CardDescription>Tu representación visual en la academia. ¡Tu vitalidad se refleja aquí!</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {avatarLoading ? (
+                <div>Cargando avatar...</div>
+              ) : avatarError ? (
+                <div>Error al cargar el avatar.</div>
+              ) : avatar ? (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+                  <div className="md:col-span-1">
+                    <AvatarDisplay avatar={avatar} className="w-full max-w-[250px] mx-auto" />
+                  </div>
+                  <div className="md:col-span-2">
+                    <Dialog open={isEditorOpen} onOpenChange={setIsEditorOpen}>
+                      <DialogTrigger asChild>
+                        <Button>
+                          <Edit className="w-4 h-4 mr-2" />
+                          Personalizar Avatar
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-2xl">
+                        <AvatarEditor avatar={avatar} onClose={() => setIsEditorOpen(false)} />
+                      </DialogContent>
+                    </Dialog>
+                    <div className="mt-4 space-y-2 text-sm text-muted-foreground">
+                      <p>Tu avatar cambia según tus puntos de vitalidad semanales.</p>
+                      <p>¡Completa tus hábitos para verlo más enérgico y saludable!</p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="statistics" className="space-y-6">

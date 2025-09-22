@@ -22,14 +22,14 @@ const NutritionPlanAdmin: React.FC = () => {
   const { data: nutritionData, isLoading: planLoading } = useNutritionPlan(selectedUserId || 0);
   const upsertPlanMutation = useUpsertNutritionPlan(selectedUserId || 0);
 
-  // Update content when plan data changes - fixed dependency array
+  // Update content when plan data changes
   React.useEffect(() => {
     if (nutritionData?.plan?.content_md) {
       setMarkdownContent(nutritionData.plan.content_md);
     } else {
       setMarkdownContent('');
     }
-  }, [nutritionData?.plan?.content_md]);
+  }, [nutritionData]);
 
   const handleUserSelect = (userId: string) => {
     const id = parseInt(userId);

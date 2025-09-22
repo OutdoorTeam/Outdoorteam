@@ -25,6 +25,7 @@ import dailyNotesRoutes from './routes/daily-notes-routes.js';
 import myGoalsRoutes from './routes/my-goals-routes.js';
 import apiRoutes from './routes/api-routes.js';
 import authRoutes from './routes/auth-routes.js';
+import avatarRoutes from './routes/avatar-routes.js';
 import { authenticateToken, requireAdmin } from './middleware/auth.js';
 import {
   validateRequest,
@@ -330,6 +331,7 @@ app.use('/api', dailyNotesRoutes);
 app.use('/api', myGoalsRoutes);
 app.use('/api', apiRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api', avatarRoutes);
 
 // Admin Users Route (Critical for AdminPage)
 app.get('/api/users', authenticateToken, requireAdmin, async (req: any, res: express.Response) => {
