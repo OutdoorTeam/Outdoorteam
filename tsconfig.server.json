@@ -11,8 +11,12 @@
     "resolveJsonModule": true,
     "strict": false,
     "allowSyntheticDefaultImports": true,
-    "rootDir": "server"
+    "rootDir": ".",
+    "baseUrl": ".",
+    "paths": {
+      "~shared/*": ["shared/*"]
+    }
   },
-  "include": ["server/**/*.ts", "server/types/**/*.d.ts"],
+  "include": ["server/**/*.ts", "server/types/**/*.d.ts", "shared/**/*.ts"],
   "exclude": ["node_modules"]
 }

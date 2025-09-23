@@ -12,8 +12,7 @@ interface UserFeatures {
 }
 
 interface AppUser {
-  id: number; // Our internal DB id
-  supabase_id: string; // Supabase auth user id
+  id: string; // Our internal DB id, now a UUID string
   email: string;
   full_name: string;
   role: string;
@@ -29,7 +28,7 @@ interface AuthContextType {
   register: (fullName: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   loginWithGoogle: () => Promise<void>;
-  assignPlan: (planId: number) => Promise<void>;
+  assignPlan: (planId: string) => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
@@ -88,7 +87,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch (error) {
       console.error('Error fetching app user profile:', error);
       // If fetching our profile fails, the user might not be synced yet.
-      // We can log them out or show a limited state.
+      // This can happen on first login. We can log them out or show a limited state.
       setUser(null);
     }
   };
@@ -116,8 +115,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       },
     });
     if (error) throw error;
-    // After sign up, we might need to sync the user to our public.users table.
-    // This is handled by a trigger/webhook in Supabase.
+    // After sign up, a Supabase trigger/webhook should sync the user to our public.users table.
   };
 
   const logout = async () => {
@@ -134,7 +132,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (error) throw error;
   };
 
-  const assignPlan = async (planId: number) => {
+  const assignPlan = async (planId: string) => {
     if (!user) throw new Error('No user logged in');
     // This logic remains, as it's a custom backend operation
     await apiRequest(`/api/users/${user.id}/assign-plan`, {

@@ -1,7 +1,10 @@
+-- Enable UUID extension
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
 -- Create all tables for the Outdoor Team application for PostgreSQL
 
 CREATE TABLE IF NOT EXISTS users (
-  id SERIAL PRIMARY KEY,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   email TEXT UNIQUE NOT NULL,
   password_hash TEXT,
   full_name TEXT NOT NULL,
@@ -14,16 +17,16 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 CREATE TABLE IF NOT EXISTS user_notes (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   content TEXT NOT NULL,
   date TEXT NOT NULL,
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS step_counts (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   steps INTEGER NOT NULL,
   date TEXT NOT NULL,
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
@@ -34,12 +37,12 @@ CREATE TABLE IF NOT EXISTS step_counts (
 );
 
 CREATE TABLE IF NOT EXISTS user_files (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   filename TEXT NOT NULL,
   file_type TEXT NOT NULL,
   file_path TEXT NOT NULL,
-  uploaded_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  uploaded_by UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
   file_size INTEGER,
   mime_type TEXT,
@@ -50,14 +53,14 @@ CREATE TABLE IF NOT EXISTS user_files (
 );
 
 CREATE TABLE IF NOT EXISTS broadcast_messages (
-  id SERIAL PRIMARY KEY,
-  sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  sender_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   message TEXT NOT NULL,
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS plans (
-  id SERIAL PRIMARY KEY,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name TEXT NOT NULL,
   description TEXT NOT NULL,
   price REAL DEFAULT 0,
@@ -69,8 +72,8 @@ CREATE TABLE IF NOT EXISTS plans (
 );
 
 CREATE TABLE IF NOT EXISTS daily_habits (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   date TEXT NOT NULL,
   training_completed INTEGER DEFAULT 0,
   nutrition_completed INTEGER DEFAULT 0,
@@ -84,7 +87,7 @@ CREATE TABLE IF NOT EXISTS daily_habits (
 );
 
 CREATE TABLE IF NOT EXISTS content_library (
-  id SERIAL PRIMARY KEY,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   title TEXT NOT NULL,
   description TEXT,
   video_url TEXT,
@@ -99,8 +102,8 @@ CREATE TABLE IF NOT EXISTS content_library (
 );
 
 CREATE TABLE IF NOT EXISTS meditation_sessions (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   duration_minutes INTEGER NOT NULL,
   meditation_type TEXT NOT NULL,
   breathing_cycle_json TEXT,
@@ -109,7 +112,7 @@ CREATE TABLE IF NOT EXISTS meditation_sessions (
 );
 
 CREATE TABLE IF NOT EXISTS daily_reset_log (
-  id SERIAL PRIMARY KEY,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   reset_date TEXT NOT NULL UNIQUE,
   executed_at TIMESTAMPTZ NOT NULL,
   users_processed INTEGER DEFAULT 0,
@@ -123,8 +126,8 @@ CREATE TABLE IF NOT EXISTS daily_reset_log (
 );
 
 CREATE TABLE IF NOT EXISTS daily_history (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   date TEXT NOT NULL,
   daily_points INTEGER DEFAULT 0,
   steps INTEGER DEFAULT 0,
@@ -138,10 +141,10 @@ CREATE TABLE IF NOT EXISTS daily_history (
 );
 
 CREATE TABLE IF NOT EXISTS system_logs (
-  id SERIAL PRIMARY KEY,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   level TEXT NOT NULL DEFAULT 'info',
   event TEXT NOT NULL,
-  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
   route TEXT,
   ip_address TEXT,
   user_agent TEXT,
@@ -150,30 +153,30 @@ CREATE TABLE IF NOT EXISTS system_logs (
 );
 
 CREATE TABLE IF NOT EXISTS nutrition_plans (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   content_md TEXT,
   version INTEGER NOT NULL DEFAULT 1,
   status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
-  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS training_plans (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   title TEXT,
   version INTEGER NOT NULL DEFAULT 1,
   status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
-  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS training_plan_days (
-  id SERIAL PRIMARY KEY,
-  plan_id INTEGER NOT NULL REFERENCES training_plans(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  plan_id UUID NOT NULL REFERENCES training_plans(id) ON DELETE CASCADE,
   day_index INTEGER NOT NULL,
   title TEXT,
   notes TEXT,
@@ -181,11 +184,11 @@ CREATE TABLE IF NOT EXISTS training_plan_days (
 );
 
 CREATE TABLE IF NOT EXISTS training_exercises (
-  id SERIAL PRIMARY KEY,
-  day_id INTEGER NOT NULL REFERENCES training_plan_days(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  day_id UUID NOT NULL REFERENCES training_plan_days(id) ON DELETE CASCADE,
   sort_order INTEGER NOT NULL DEFAULT 0,
   exercise_name TEXT NOT NULL,
-  content_library_id INTEGER REFERENCES content_library(id) ON DELETE SET NULL,
+  content_library_id UUID REFERENCES content_library(id) ON DELETE SET NULL,
   youtube_url TEXT,
   sets INTEGER,
   reps TEXT,
@@ -196,8 +199,8 @@ CREATE TABLE IF NOT EXISTS training_exercises (
 );
 
 CREATE TABLE IF NOT EXISTS user_permissions (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   dashboard_enabled INTEGER DEFAULT 1,
   training_enabled INTEGER DEFAULT 1,
   nutrition_enabled INTEGER DEFAULT 1,
@@ -210,8 +213,8 @@ CREATE TABLE IF NOT EXISTS user_permissions (
 );
 
 CREATE TABLE IF NOT EXISTS user_goals (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   daily_steps_goal INTEGER DEFAULT 8000,
   weekly_points_goal INTEGER DEFAULT 28,
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
@@ -220,22 +223,22 @@ CREATE TABLE IF NOT EXISTS user_goals (
 );
 
 CREATE TABLE IF NOT EXISTS training_plan_schedules (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   plan_title TEXT,
   week_number INTEGER DEFAULT 1,
   status TEXT DEFAULT 'active' CHECK (status IN ('active', 'completed', 'paused')),
-  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS training_plan_exercises (
-  id SERIAL PRIMARY KEY,
-  schedule_id INTEGER NOT NULL REFERENCES training_plan_schedules(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  schedule_id UUID NOT NULL REFERENCES training_plan_schedules(id) ON DELETE CASCADE,
   day_name TEXT NOT NULL,
   exercise_name TEXT NOT NULL,
-  content_library_id INTEGER REFERENCES content_library(id) ON DELETE SET NULL,
+  content_library_id UUID REFERENCES content_library(id) ON DELETE SET NULL,
   video_url TEXT,
   sets INTEGER,
   reps TEXT,
@@ -246,8 +249,8 @@ CREATE TABLE IF NOT EXISTS training_plan_exercises (
 );
 
 CREATE TABLE IF NOT EXISTS user_avatars (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   gender TEXT NOT NULL DEFAULT 'female',
   skin_tone TEXT NOT NULL DEFAULT '#f2d5b1',
   hair_style TEXT NOT NULL DEFAULT 'long',

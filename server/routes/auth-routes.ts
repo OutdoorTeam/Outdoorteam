@@ -8,14 +8,17 @@ import { supabaseAdmin } from '../supabase.js';
 
 const router = Router();
 
-// This route is now a webhook to sync Supabase user to our public.users table
+// This route is a webhook to sync a new Supabase user to our public.users table
 router.post('/sync-user', async (req, res) => {
-  // A simple auth mechanism for the webhook
+  if (!db) {
+    return res.status(503).send('Database service unavailable');
+  }
+  // A simple auth mechanism for the webhook, can be improved
   if (req.headers['x-internal-secret'] !== process.env.INTERNAL_API_KEY) {
     return res.status(401).send('Unauthorized');
   }
 
-  const { user } = req.body;
+  const { record: user } = req.body; // Supabase webhook sends user data in `record`
 
   if (!user || !user.id || !user.email) {
     return res.status(400).send('Invalid user data');
@@ -24,17 +27,18 @@ router.post('/sync-user', async (req, res) => {
   try {
     const existingUser = await db
       .selectFrom('users')
-      .where('email', '=', user.email)
+      .where('id', '=', user.id)
       .select('id')
       .executeTakeFirst();
 
     const userData = {
+      id: user.id, // Use Supabase UUID as our primary key
       email: user.email,
-      full_name: user.user_metadata?.full_name || 'New User',
-      role: user.user_metadata?.role || 'user',
-      plan_type: user.user_metadata?.plan_type || null,
+      full_name: user.raw_user_meta_data?.full_name || 'New User',
+      role: user.raw_user_meta_data?.role || 'user',
+      plan_type: user.raw_user_meta_data?.plan_type || null,
       is_active: 1,
-      features_json: JSON.stringify(user.user_metadata?.features || {}),
+      features_json: JSON.stringify(user.raw_user_meta_data?.features || {}),
       updated_at: new Date(),
     };
 
@@ -69,7 +73,7 @@ router.post('/change-password', authenticateToken, async (req: any, res) => {
     return sendErrorResponse(res, ERROR_CODES.SERVER_ERROR, 'Auth service is not configured.');
   }
   try {
-    const userId = req.user.supabase_id; // Use Supabase user ID
+    const userId = req.user.id; // Use user ID from our token
     const { password } = req.body;
 
     if (!password || password.length < 8) {

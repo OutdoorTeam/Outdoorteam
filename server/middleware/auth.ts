@@ -17,11 +17,15 @@ declare global {
 
 // Authentication middleware for Supabase JWT
 export const authenticateToken = async (req: Request, res: Response, next: NextFunction) => {
+  if (!db) {
+    sendErrorResponse(res, ERROR_CODES.SERVER_ERROR, 'Database not connected');
+    return;
+  }
   if (!SUPABASE_JWT_SECRET) {
     console.warn('SUPABASE_JWT_SECRET is not set. Skipping authentication.');
-    // In a real scenario, you might want to deny access if the secret is missing.
-    // For local testing, we can allow it to proceed but without a user object.
-    return next();
+    // For local testing without a JWT secret, we can deny access.
+    sendErrorResponse(res, ERROR_CODES.AUTHENTICATION_ERROR, 'Authentication service not configured');
+    return;
   }
 
   const authHeader = req.headers['authorization'];
@@ -36,13 +40,10 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
     const decoded = jwt.verify(token, SUPABASE_JWT_SECRET) as any;
     
     // The 'sub' claim in a Supabase JWT is the user's UUID.
-    // We need to find the user in our database. Assuming our `users` table
-    // has a column that stores the Supabase user UUID. If not, this needs adjustment.
-    // For now, let's assume we are matching by email.
     const user = await db
       .selectFrom('users')
       .selectAll()
-      .where('email', '=', decoded.email)
+      .where('id', '=', decoded.sub) // Match by Supabase UUID
       .executeTakeFirst();
 
     if (!user) {
@@ -57,8 +58,8 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
       return;
     }
 
-    // Attach both Supabase user info and our DB user info
-    req.user = { ...user, supabase_id: decoded.sub };
+    // Attach our DB user info. The supabase_id is the same as our user.id now.
+    req.user = user;
     next();
   } catch (error) {
     console.error('Token verification error:', error);

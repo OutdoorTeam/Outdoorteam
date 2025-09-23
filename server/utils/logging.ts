@@ -5,7 +5,7 @@ import { db } from '../database.js';
 interface SystemLogData {
   level: 'info' | 'warn' | 'error' | 'critical';
   event: string;
-  user_id?: number;
+  user_id?: string;
   route?: string;
   ip_address?: string;
   user_agent?: string;
@@ -43,7 +43,7 @@ function validateSystemLogData(data: any): SystemLogData {
     return {
       level: data.level,
       event: String(data.event).substring(0, 200), // Limit length
-      user_id: typeof data.user_id === 'number' && data.user_id > 0 ? data.user_id : undefined,
+      user_id: typeof data.user_id === 'string' ? data.user_id : undefined,
       route: typeof data.route === 'string' ? data.route.substring(0, 500) : undefined,
       ip_address: typeof data.ip_address === 'string' ? data.ip_address.substring(0, 45) : undefined,
       user_agent: typeof data.user_agent === 'string' ? data.user_agent.substring(0, 1000) : undefined,
@@ -64,7 +64,7 @@ export class SystemLogger {
     level: 'info' | 'warn' | 'error' | 'critical',
     event: string,
     options?: {
-      userId?: number;
+      userId?: string;
       route?: string;
       ipAddress?: string;
       userAgent?: string;
@@ -72,6 +72,10 @@ export class SystemLogger {
       req?: Request;
     }
   ): Promise<void> {
+    if (!db) {
+      console.error('SystemLogger: Database not available. Cannot log to DB.');
+      return;
+    }
     try {
       // Sanitize all inputs to prevent circular references
       const safeOptions = sanitize(options) as typeof options;
@@ -101,7 +105,7 @@ export class SystemLogger {
           ip_address: validated.ip_address || null,
           user_agent: validated.user_agent || null,
           metadata: validated.metadata ? JSON.stringify(validated.metadata) : null,
-          created_at: new Date().toISOString()
+          created_at: new Date()
         })
         .execute();
 
@@ -125,7 +129,7 @@ export class SystemLogger {
     event: string,
     fieldErrors: Record<string, string>,
     options?: {
-      userId?: number;
+      userId?: string;
       req?: Request;
     }
   ): Promise<void> {
@@ -158,7 +162,7 @@ export class SystemLogger {
     filename: string,
     error: string,
     options?: {
-      userId?: number;
+      userId?: string;
       req?: Request;
     }
   ): Promise<void> {
@@ -176,7 +180,7 @@ export class SystemLogger {
     event: string,
     error: Error,
     options?: {
-      userId?: number;
+      userId?: string;
       req?: Request;
     }
   ): Promise<void> {
@@ -191,13 +195,14 @@ export class SystemLogger {
   }
 
   static async cleanupOldLogs(retentionDays: number = 90): Promise<void> {
+    if (!db) return;
     try {
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
       
       const result = await db
         .deleteFrom('system_logs')
-        .where('created_at', '<', cutoffDate.toISOString())
+        .where('created_at', '<', cutoffDate)
         .execute();
 
       console.log(`Cleaned up ${result.length} old log entries older than ${retentionDays} days`);
@@ -210,6 +215,7 @@ export class SystemLogger {
     limit: number = 100,
     level?: 'info' | 'warn' | 'error' | 'critical'
   ): Promise<any[]> {
+    if (!db) return [];
     try {
       let query = db
         .selectFrom('system_logs')
@@ -229,16 +235,19 @@ export class SystemLogger {
   }
 
   static async getLogStats(): Promise<Record<string, number>> {
+    if (!db) return {};
     try {
       const stats = await db
         .selectFrom('system_logs')
-        .select(['level', db.fn.count<number>('id').as('count')])
-        .where('created_at', '>', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()) // Last 24 hours
+        .select(['level', db.fn.count<string>('id').as('count')])
+        .where('created_at', '>', new Date(Date.now() - 24 * 60 * 60 * 1000)) // Last 24 hours
         .groupBy('level')
         .execute();
 
       return stats.reduce((acc, stat) => {
-        acc[stat.level] = Number(stat.count);
+        if (stat.level) {
+          acc[stat.level] = Number(stat.count);
+        }
         return acc;
       }, {} as Record<string, number>);
     } catch (error) {

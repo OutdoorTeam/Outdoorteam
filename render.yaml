@@ -3,8 +3,9 @@ services:
     name: outdoor-team-app
     env: node
     plan: free
+    rootDir: .
     buildCommand: "npm install && npm run build"
-    startCommand: "node dist/server/index.js"
+    startCommand: "npm start"
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
@@ -16,6 +17,8 @@ services:
 envVarGroups:
   - name: outdoor-team-env
     envVars:
+      - key: DATABASE_URL
+        value: "" # Add your PostgreSQL connection string from Supabase
       - key: SUPABASE_URL
         value: "" # Add your Supabase project URL
       - key: SUPABASE_ANON_KEY
@@ -24,16 +27,16 @@ envVarGroups:
         value: "" # Add your Supabase service role key
       - key: SUPABASE_JWT_SECRET
         value: "" # Add your Supabase JWT secret
-      - key: DATABASE_URL
-        value: "" # Add your PostgreSQL connection string from Supabase
-      - key: VITE_SUPABASE_URL
-        sync: false
-      - key: VITE_SUPABASE_ANON_KEY
-        sync: false
+      - key: CORS_ORIGIN
+        value: "https://your-frontend-domain.com,capacitor://localhost"
+      - key: STRICT_ENV
+        value: "true" # Set to false to run in lax mode
+      - key: ENABLE_SCHEDULERS
+        value: "true" # Set to false to disable cron jobs
       - key: FEATURE_MIGRATIONS
-        value: true # Run migrations on deploy
+        value: "true" # Run migrations on first deploy
       - key: FEATURE_SEED_DB
-        value: false
+        value: "false"
       - key: JWT_SECRET
         generateValue: true # Generate a random secret
       - key: VAPID_PUBLIC_KEY
