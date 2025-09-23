@@ -9,14 +9,13 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { registerSchema, RegisterFormData } from '../../../shared/validation-schemas';
-import { apiRequest, parseApiError, getErrorMessage, getFieldErrors, focusFirstInvalidField, setFormErrors } from '@/utils/error-handling';
+import { registerSchema, RegisterFormData } from '../../shared/validation-schemas';
 import { Eye, EyeOff } from 'lucide-react';
 
 const RegisterPage: React.FC = () => {
   const [showPassword, setShowPassword] = React.useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = React.useState(false);
-  const { user } = useAuth();
+  const { user, register: registerUser, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -24,7 +23,6 @@ const RegisterPage: React.FC = () => {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-    setError,
     watch,
     setValue
   } = useForm<RegisterFormData>({
@@ -46,46 +44,32 @@ const RegisterPage: React.FC = () => {
 
   const onSubmit = async (data: RegisterFormData) => {
     try {
-      const { acceptTos, confirmPassword, ...registrationData } = data;
-      
-      const response = await apiRequest<{ user: any; token: string }>('/api/auth/register', {
-        method: 'POST',
-        body: JSON.stringify(registrationData),
-      });
-
-      localStorage.setItem('auth_token', response.token);
-      
+      await registerUser(data.full_name, data.email, data.password);
       toast({
         title: "Registro exitoso",
-        description: `¡Bienvenido ${response.user.full_name}! Tu cuenta ha sido creada.`,
+        description: "¡Bienvenido! Revisa tu correo para confirmar tu cuenta.",
         variant: "success",
       });
-
-      // Force reload to update auth context
-      window.location.reload();
-    } catch (error) {
-      const apiError = parseApiError(error);
-      const fieldErrors = getFieldErrors(apiError);
-      
-      if (Object.keys(fieldErrors).length > 0) {
-        setFormErrors(setError, fieldErrors);
-        focusFirstInvalidField();
-      } else {
-        toast({
-          title: "Error en el registro",
-          description: getErrorMessage(apiError),
-          variant: "destructive",
-        });
-      }
+      // The auth context will handle the user state change, and useEffect will navigate.
+    } catch (error: any) {
+      toast({
+        title: "Error en el registro",
+        description: error.message || "No se pudo crear la cuenta. Inténtalo de nuevo.",
+        variant: "destructive",
+      });
     }
   };
 
   const handleGoogleRegister = async () => {
-    toast({
-      title: "Función no disponible",
-      description: "El registro con Google aún no está implementado. Por favor usa el formulario.",
-      variant: "warning",
-    });
+    try {
+      await loginWithGoogle();
+    } catch (error: any) {
+      toast({
+        title: "Error con Google",
+        description: error.message || "No se pudo registrar con Google.",
+        variant: "destructive",
+      });
+    }
   };
 
   if (user) {
@@ -180,7 +164,7 @@ const RegisterPage: React.FC = () => {
                   </p>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  La contraseña debe tener al menos 8 caracteres, incluyendo mayúsculas, minúsculas y números.
+                  La contraseña debe tener al menos 8 caracteres.
                 </p>
               </div>
 
@@ -238,10 +222,6 @@ const RegisterPage: React.FC = () => {
                   Acepto los{' '}
                   <Link to="/terms" className="text-primary hover:underline">
                     términos y condiciones
-                  </Link>{' '}
-                  y la{' '}
-                  <Link to="/privacy" className="text-primary hover:underline">
-                    política de privacidad
                   </Link>
                 </Label>
               </div>

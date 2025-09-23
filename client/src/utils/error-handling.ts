@@ -1,21 +1,22 @@
-// Error handling utilities for API calls and form validation
+import { supabase } from '@/supabase';
 
-export interface ApiError {
+export interface ApiErrorData {
   code: string;
   message: string;
   fieldErrors?: Record<string, string>;
 }
 
 export interface ApiErrorResponse {
-  error: ApiError;
+  error: ApiErrorData;
 }
 
-// Generic API request function with error handling
+// Generic API request function with error handling for our custom backend
 export async function apiRequest<T>(
   url: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = localStorage.getItem('auth_token');
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
   
   const defaultOptions: RequestInit = {
     headers: {
@@ -25,48 +26,35 @@ export async function apiRequest<T>(
   };
 
   const config = { ...defaultOptions, ...options };
-  
-  // Merge headers properly
   config.headers = { ...defaultOptions.headers, ...options.headers };
 
   try {
     const response = await fetch(url, config);
-    
-    // Handle non-JSON responses
     const contentType = response.headers.get('content-type');
     
     if (!response.ok) {
-      // Try to parse error as JSON
       if (contentType?.includes('application/json')) {
         const errorData: ApiErrorResponse = await response.json();
         throw new ApiError(errorData.error?.code || 'UNKNOWN_ERROR', errorData.error?.message || 'An error occurred', errorData.error?.fieldErrors);
       } else {
-        // Fallback for non-JSON errors
         const textError = await response.text();
         throw new ApiError('HTTP_ERROR', textError || `HTTP ${response.status}: ${response.statusText}`);
       }
     }
     
-    // Handle successful responses
     if (contentType?.includes('application/json')) {
       return await response.json();
     } else {
-      // For non-JSON responses, return the response itself
       return response as unknown as T;
     }
   } catch (error) {
-    // Re-throw ApiError instances
     if (error instanceof ApiError) {
       throw error;
     }
-    
-    // Handle network errors, timeout, etc.
     if (error instanceof TypeError) {
-      throw new ApiError('NETWORK_ERROR', 'No se pudo conectar al servidor. Verifica tu conexión a internet.');
+      throw new ApiError('NETWORK_ERROR', 'Could not connect to the server. Please check your internet connection.');
     }
-    
-    // Handle other errors
-    throw new ApiError('UNKNOWN_ERROR', error instanceof Error ? error.message : 'Error desconocido');
+    throw new ApiError('UNKNOWN_ERROR', error instanceof Error ? error.message : 'An unknown error occurred');
   }
 }
 
@@ -87,30 +75,26 @@ export function parseApiError(error: unknown): ApiError {
   if (error instanceof ApiError) {
     return error;
   }
-  
   if (error instanceof Error) {
     return new ApiError('UNKNOWN_ERROR', error.message);
   }
-  
-  return new ApiError('UNKNOWN_ERROR', 'Error desconocido');
+  return new ApiError('UNKNOWN_ERROR', 'An unknown error occurred');
 }
 
 // Extract user-friendly error message
 export function getErrorMessage(error: ApiError): string {
-  // Map common error codes to user-friendly messages
   const errorMessages: Record<string, string> = {
-    'VALIDATION_ERROR': 'Los datos proporcionados no son válidos.',
-    'AUTHENTICATION_ERROR': 'Credenciales inválidas. Por favor, verifica tu email y contraseña.',
-    'AUTHORIZATION_ERROR': 'No tienes permisos para realizar esta acción.',
-    'NOT_FOUND_ERROR': 'El recurso solicitado no fue encontrado.',
-    'DUPLICATE_ERROR': 'Ya existe un registro con esta información.',
-    'RATE_LIMIT_ERROR': 'Demasiadas solicitudes. Por favor, espera un momento.',
-    'NETWORK_ERROR': 'Error de conexión. Verifica tu internet.',
-    'FILE_UPLOAD_ERROR': 'Error al subir el archivo.',
-    'SERVER_ERROR': 'Error interno del servidor. Intenta nuevamente.',
+    'VALIDATION_ERROR': 'The data provided is invalid.',
+    'AUTHENTICATION_ERROR': 'Invalid credentials. Please check your email and password.',
+    'AUTHORIZATION_ERROR': 'You do not have permission to perform this action.',
+    'NOT_FOUND_ERROR': 'The requested resource was not found.',
+    'DUPLICATE_ERROR': 'A record with this information already exists.',
+    'RATE_LIMIT_ERROR': 'Too many requests. Please wait a moment.',
+    'NETWORK_ERROR': 'Network error. Please check your connection.',
+    'FILE_UPLOAD_ERROR': 'Error uploading file.',
+    'SERVER_ERROR': 'Internal server error. Please try again.',
   };
-  
-  return errorMessages[error.code] || error.message || 'Error desconocido';
+  return errorMessages[error.code] || error.message || 'An unknown error occurred';
 }
 
 // Extract field errors for forms
@@ -121,11 +105,6 @@ export function getFieldErrors(error: ApiError): Record<string, string> {
 // Check if error is authentication related
 export function isAuthError(error: ApiError): boolean {
   return error.code === 'AUTHENTICATION_ERROR' || error.code === 'AUTHORIZATION_ERROR';
-}
-
-// Check if error is validation related
-export function isValidationError(error: ApiError): boolean {
-  return error.code === 'VALIDATION_ERROR';
 }
 
 // Helper for setting form errors in react-hook-form
@@ -146,42 +125,4 @@ export function focusFirstInvalidField(): void {
       firstErrorElement.focus();
     }
   }, 100);
-}
-
-// Retry logic for API calls
-export async function retryApiCall<T>(
-  apiCall: () => Promise<T>,
-  maxRetries: number = 3,
-  delay: number = 1000
-): Promise<T> {
-  let lastError: ApiError;
-  
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      return await apiCall();
-    } catch (error) {
-      lastError = parseApiError(error);
-      
-      // Don't retry on validation or authentication errors
-      if (isValidationError(lastError) || isAuthError(lastError)) {
-        throw lastError;
-      }
-      
-      // If this was the last attempt, throw the error
-      if (attempt === maxRetries) {
-        throw lastError;
-      }
-      
-      // Wait before retrying
-      await new Promise(resolve => setTimeout(resolve, delay * attempt));
-    }
-  }
-  
-  throw lastError!;
-}
-
-// Handle logout on auth errors
-export function handleAuthError(): void {
-  localStorage.removeItem('auth_token');
-  window.location.href = '/login';
 }

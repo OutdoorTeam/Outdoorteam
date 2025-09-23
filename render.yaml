@@ -1,0 +1,44 @@
+services:
+  - type: web
+    name: outdoor-team-app
+    env: node
+    plan: free
+    buildCommand: "npm install && npm run build"
+    startCommand: "node dist/server/index.js"
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - fromGroup: outdoor-team-env
+
+envVarGroups:
+  - name: outdoor-team-env
+    envVars:
+      - key: SUPABASE_URL
+        value: "" # Add your Supabase project URL
+      - key: SUPABASE_ANON_KEY
+        value: "" # Add your Supabase anon key
+      - key: SUPABASE_SERVICE_ROLE
+        value: "" # Add your Supabase service role key
+      - key: SUPABASE_JWT_SECRET
+        value: "" # Add your Supabase JWT secret
+      - key: DATABASE_URL
+        value: "" # Add your PostgreSQL connection string from Supabase
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+      - key: FEATURE_MIGRATIONS
+        value: true # Run migrations on deploy
+      - key: FEATURE_SEED_DB
+        value: false
+      - key: JWT_SECRET
+        generateValue: true # Generate a random secret
+      - key: VAPID_PUBLIC_KEY
+        value: "" # Add your VAPID public key
+      - key: VAPID_PRIVATE_KEY
+        value: "" # Add your VAPID private key
+      - key: VAPID_EMAIL
+        value: "admin@outdoorteam.com"

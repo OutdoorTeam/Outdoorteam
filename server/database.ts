@@ -1,6 +1,8 @@
-import { Kysely, SqliteDialect } from 'kysely';
-import Database from 'better-sqlite3';
-import path from 'path';
+import { Kysely, PostgresDialect } from 'kysely';
+import { Pool } from 'pg';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 export interface DatabaseSchema {
   users: {
@@ -12,8 +14,8 @@ export interface DatabaseSchema {
     plan_type: string | null;
     is_active: number;
     features_json: string;
-    created_at: string;
-    updated_at: string;
+    created_at: Date;
+    updated_at: Date;
   };
   habits: {
     id: number;
@@ -21,7 +23,7 @@ export interface DatabaseSchema {
     name: string;
     is_completed: number;
     date: string;
-    created_at: string;
+    created_at: Date;
   };
   daily_habits: {
     id: number;
@@ -33,8 +35,8 @@ export interface DatabaseSchema {
     meditation_completed: number;
     daily_points: number;
     steps: number;
-    created_at: string;
-    updated_at: string;
+    created_at: Date;
+    updated_at: Date;
   };
   daily_history: {
     id: number;
@@ -47,21 +49,21 @@ export interface DatabaseSchema {
     movement_completed: number;
     meditation_completed: number;
     notes_content: string | null;
-    archived_at: string;
+    archived_at: Date;
   };
   user_notes: {
     id: number;
     user_id: number;
     content: string;
     date: string;
-    created_at: string;
+    created_at: Date;
   };
   step_counts: {
     id: number;
     user_id: number;
     steps: number;
     date: string;
-    created_at: string;
+    created_at: Date;
   };
   user_files: {
     id: number;
@@ -70,13 +72,13 @@ export interface DatabaseSchema {
     file_type: string;
     file_path: string;
     uploaded_by: number;
-    created_at: string;
+    created_at: Date;
   };
   broadcast_messages: {
     id: number;
     sender_id: number;
     message: string;
-    created_at: string;
+    created_at: Date;
   };
   plans: {
     id: number;
@@ -86,8 +88,8 @@ export interface DatabaseSchema {
     services_included: string;
     features_json: string;
     is_active: number;
-    created_at: string;
-    updated_at: string;
+    created_at: Date;
+    updated_at: Date;
   };
   content_library: {
     id: number;
@@ -97,7 +99,7 @@ export interface DatabaseSchema {
     category: string;
     subcategory: string | null;
     is_active: number;
-    created_at: string;
+    created_at: Date;
   };
   content_videos: {
     id: number;
@@ -106,7 +108,7 @@ export interface DatabaseSchema {
     category: string;
     video_url: string;
     is_active: number;
-    created_at: string;
+    created_at: Date;
   };
   workout_of_day: {
     id: number;
@@ -115,8 +117,8 @@ export interface DatabaseSchema {
     exercises_json: string;
     date: string;
     is_active: number;
-    created_at: string;
-    updated_at: string;
+    created_at: Date;
+    updated_at: Date;
   };
   meditation_sessions: {
     id: number;
@@ -125,12 +127,12 @@ export interface DatabaseSchema {
     meditation_type: string;
     breathing_cycle_json: string | null;
     comment: string | null;
-    completed_at: string;
+    completed_at: Date;
   };
   daily_reset_log: {
     id: number;
     reset_date: string;
-    executed_at: string;
+    executed_at: Date;
     users_processed: number;
     total_daily_points: number;
     total_steps: number;
@@ -138,7 +140,7 @@ export interface DatabaseSchema {
     status: string;
     error_message: string | null;
     execution_time_ms: number;
-    created_at: string;
+    created_at: Date;
   };
   system_logs: {
     id: number;
@@ -149,7 +151,7 @@ export interface DatabaseSchema {
     ip_address: string | null;
     user_agent: string | null;
     metadata: string | null;
-    created_at: string;
+    created_at: Date;
   };
   user_notifications: {
     id: number;
@@ -160,16 +162,16 @@ export interface DatabaseSchema {
     push_token: string | null;
     push_endpoint: string | null;
     push_keys: string | null;
-    created_at: string;
-    updated_at: string;
+    created_at: Date;
+    updated_at: Date;
   };
   notification_jobs: {
     id: number;
     user_id: number;
     habit_key: string;
     reminder_time: string;
-    next_send_at: string;
-    created_at: string;
+    next_send_at: Date;
+    created_at: Date;
   };
   nutrition_plans: {
     id: number;
@@ -178,8 +180,8 @@ export interface DatabaseSchema {
     version: number;
     status: string;
     created_by: number | null;
-    created_at: string;
-    updated_at: string;
+    created_at: Date;
+    updated_at: Date;
   };
   training_plans: {
     id: number;
@@ -188,8 +190,8 @@ export interface DatabaseSchema {
     version: number;
     status: string;
     created_by: number | null;
-    created_at: string;
-    updated_at: string;
+    created_at: Date;
+    updated_at: Date;
   };
   training_plan_days: {
     id: number;
@@ -220,8 +222,8 @@ export interface DatabaseSchema {
     week_number: number;
     status: string;
     created_by: number | null;
-    created_at: string;
-    updated_at: string;
+    created_at: Date;
+    updated_at: Date;
   };
   training_plan_exercises: {
     id: number;
@@ -242,20 +244,20 @@ export interface DatabaseSchema {
     user_id: number;
     dashboard_enabled: number;
     training_enabled: number;
-nutrition_enabled: number;
+    nutrition_enabled: number;
     meditation_enabled: number;
     active_breaks_enabled: number;
     exercises_enabled: number;
-    created_at: string;
-    updated_at: string;
+    created_at: Date;
+    updated_at: Date;
   };
   user_goals: {
     id: number;
     user_id: number;
     daily_steps_goal: number;
     weekly_points_goal: number;
-    created_at: string;
-    updated_at: string;
+    created_at: Date;
+    updated_at: Date;
   };
   user_avatars: {
     id: number;
@@ -270,17 +272,18 @@ nutrition_enabled: number;
     pants_color: string;
     accessory: string;
     vitality_level: number;
-    created_at: string;
-    updated_at: string;
+    created_at: Date;
+    updated_at: Date;
   };
 }
 
-const dataDirectory = process.env.DATA_DIRECTORY || './data';
-const sqliteDb = new Database(path.join(dataDirectory, 'database.sqlite'));
+const dialect = new PostgresDialect({
+  pool: new Pool({
+    connectionString: process.env.DATABASE_URL,
+  }),
+});
 
 export const db = new Kysely<DatabaseSchema>({
-  dialect: new SqliteDialect({
-    database: sqliteDb,
-  }),
-  log: ['query', 'error']
+  dialect,
+  log: ['query', 'error'],
 });

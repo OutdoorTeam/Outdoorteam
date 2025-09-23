@@ -1,4 +1,7 @@
 import * as React from 'react';
+import { supabase } from '@/supabase';
+import { Session, User as SupabaseUser } from '@supabase/supabase-js';
+import { apiRequest } from '@/utils/error-handling';
 
 interface UserFeatures {
   habits: boolean;
@@ -8,8 +11,9 @@ interface UserFeatures {
   active_breaks: boolean;
 }
 
-interface User {
-  id: number;
+interface AppUser {
+  id: number; // Our internal DB id
+  supabase_id: string; // Supabase auth user id
   email: string;
   full_name: string;
   role: string;
@@ -18,11 +22,12 @@ interface User {
 }
 
 interface AuthContextType {
-  user: User | null;
+  user: AppUser | null;
+  session: Session | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (fullName: string, email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   assignPlan: (planId: number) => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -43,179 +48,105 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [user, setUser] = React.useState<User | null>(null);
+  const [user, setUser] = React.useState<AppUser | null>(null);
+  const [session, setSession] = React.useState<Session | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
 
   React.useEffect(() => {
-    checkAuthStatus();
+    const getInitialSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setSession(session);
+      if (session?.user) {
+        await fetchAppUser(session.user);
+      }
+      setIsLoading(false);
+    };
+
+    getInitialSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        setSession(session);
+        if (session?.user) {
+          await fetchAppUser(session.user);
+        } else {
+          setUser(null);
+        }
+      }
+    );
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
-  const checkAuthStatus = async () => {
+  const fetchAppUser = async (supabaseUser: SupabaseUser) => {
     try {
-      const token = localStorage.getItem('auth_token');
-      if (!token) {
-        setIsLoading(false);
-        return;
-      }
-
-      console.log('Checking auth status with stored token');
-      const response = await fetch('/api/auth/me', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const userData = await response.json();
-        console.log('Auth check successful for:', userData.email, 'Plan:', userData.plan_type, 'Features:', userData.features);
-        setUser(userData);
-      } else {
-        console.log('Auth check failed, removing token');
-        localStorage.removeItem('auth_token');
-      }
+      // Use our backend to get the user profile from our public.users table
+      const appUser = await apiRequest<AppUser>('/api/auth/me');
+      setUser(appUser);
     } catch (error) {
-      console.error('Error checking auth status:', error);
-      localStorage.removeItem('auth_token');
-    } finally {
-      setIsLoading(false);
+      console.error('Error fetching app user profile:', error);
+      // If fetching our profile fails, the user might not be synced yet.
+      // We can log them out or show a limited state.
+      setUser(null);
     }
   };
 
   const refreshUser = async () => {
-    try {
-      const token = localStorage.getItem('auth_token');
-      if (!token) return;
-
-      const response = await fetch('/api/auth/me', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const userData = await response.json();
-        console.log('User data refreshed:', userData.email, 'Plan:', userData.plan_type);
-        setUser(userData);
-      }
-    } catch (error) {
-      console.error('Error refreshing user data:', error);
+    const { data: { user: supabaseUser } } = await supabase.auth.getUser();
+    if (supabaseUser) {
+      await fetchAppUser(supabaseUser);
     }
   };
 
   const login = async (email: string, password: string) => {
-    console.log('Attempting login for:', email);
-    
-    const response = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ 
-        email: email.trim(), 
-        password 
-      }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error('Login failed:', data.error);
-      throw new Error(data.error || 'Error al iniciar sesión');
-    }
-
-    if (data.token && data.user) {
-      localStorage.setItem('auth_token', data.token);
-      setUser(data.user);
-      console.log('Login successful for user:', data.user.email, 'Role:', data.user.role, 'Plan:', data.user.plan_type);
-    } else {
-      throw new Error('Respuesta de login inválida');
-    }
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
   };
 
   const register = async (fullName: string, email: string, password: string) => {
-    console.log('Attempting registration for:', email);
-    
-    if (!fullName.trim()) {
-      throw new Error('El nombre completo es requerido');
-    }
-
-    if (!email.trim()) {
-      throw new Error('El correo electrónico es requerido');
-    }
-
-    if (password.length < 6) {
-      throw new Error('La contraseña debe tener al menos 6 caracteres');
-    }
-
-    const response = await fetch('/api/auth/register', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: fullName,
+        },
       },
-      body: JSON.stringify({ 
-        full_name: fullName.trim(), 
-        email: email.trim(), 
-        password 
-      }),
     });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error('Registration failed:', data.error);
-      throw new Error(data.error || 'Error al registrarse');
-    }
-
-    if (data.token && data.user) {
-      localStorage.setItem('auth_token', data.token);
-      setUser(data.user);
-      console.log('Registration successful for user:', data.user.email, 'Role:', data.user.role, 'Plan:', data.user.plan_type);
-    } else {
-      throw new Error('Respuesta de registro inválida');
-    }
+    if (error) throw error;
+    // After sign up, we might need to sync the user to our public.users table.
+    // This is handled by a trigger/webhook in Supabase.
   };
 
-  const assignPlan = async (planId: number) => {
-    if (!user) {
-      throw new Error('No user logged in');
-    }
-
-    console.log('Assigning plan', planId, 'to user', user.id);
-
-    const token = localStorage.getItem('auth_token');
-    const response = await fetch(`/api/users/${user.id}/assign-plan`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ planId }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error('Plan assignment failed:', data.error);
-      throw new Error(data.error || 'Error al asignar plan');
-    }
-
-    setUser(data);
-    console.log('Plan assigned successfully:', data.plan_type);
-  };
-
-  const logout = () => {
-    console.log('Logging out user:', user?.email);
-    localStorage.removeItem('auth_token');
+  const logout = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
     setUser(null);
+    setSession(null);
   };
 
   const loginWithGoogle = async () => {
-    console.log('Google login clicked - to be implemented');
-    throw new Error('Login con Google aún no está implementado. Por favor usa email y contraseña.');
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+    });
+    if (error) throw error;
+  };
+
+  const assignPlan = async (planId: number) => {
+    if (!user) throw new Error('No user logged in');
+    // This logic remains, as it's a custom backend operation
+    await apiRequest(`/api/users/${user.id}/assign-plan`, {
+      method: 'POST',
+      body: JSON.stringify({ planId }),
+    });
+    await refreshUser();
   };
 
   const value = React.useMemo(() => ({
     user,
+    session,
     isLoading,
     login,
     register,
@@ -223,7 +154,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     loginWithGoogle,
     assignPlan,
     refreshUser,
-  }), [user, isLoading]);
+  }), [user, session, isLoading]);
 
   return (
     <AuthContext.Provider value={value}>

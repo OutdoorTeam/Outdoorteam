@@ -8,13 +8,12 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { loginSchema, LoginFormData } from '../../../shared/validation-schemas';
-import { apiRequest, parseApiError, getErrorMessage, isAuthError, focusFirstInvalidField } from '@/utils/error-handling';
+import { loginSchema, LoginFormData } from '../../shared/validation-schemas';
 import { Eye, EyeOff } from 'lucide-react';
 
 const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = React.useState(false);
-  const { user } = useAuth();
+  const { user, login, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
@@ -43,45 +42,34 @@ const LoginPage: React.FC = () => {
 
   const onSubmit = async (data: LoginFormData) => {
     try {
-      const response = await apiRequest<{ user: any; token: string }>('/api/auth/login', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      });
-
-      localStorage.setItem('auth_token', response.token);
-      
+      await login(data.email, data.password);
       toast({
         title: "Inicio de sesión exitoso",
-        description: `Bienvenido ${response.user.full_name}`,
+        description: `Bienvenido de nuevo.`,
         variant: "success",
       });
-
-      // The useEffect will handle navigation based on user role
-      window.location.reload(); // Force reload to update auth context
-    } catch (error) {
-      const apiError = parseApiError(error);
-      
-      if (isAuthError(apiError)) {
-        setError('email', { message: 'Credenciales inválidas' });
-        setError('password', { message: 'Credenciales inválidas' });
-      } else {
-        toast({
-          title: "Error al iniciar sesión",
-          description: getErrorMessage(apiError),
-          variant: "destructive",
-        });
-      }
-
-      focusFirstInvalidField();
+      // The useEffect will handle navigation
+    } catch (error: any) {
+      toast({
+        title: "Error al iniciar sesión",
+        description: error.message || "Credenciales inválidas. Por favor, verifica tu email y contraseña.",
+        variant: "destructive",
+      });
+      setError('email', { message: ' ' });
+      setError('password', { message: ' ' });
     }
   };
 
   const handleGoogleLogin = async () => {
-    toast({
-      title: "Función no disponible",
-      description: "El login con Google aún no está implementado. Por favor usa email y contraseña.",
-      variant: "warning",
-    });
+    try {
+      await loginWithGoogle();
+    } catch (error: any) {
+      toast({
+        title: "Error con Google",
+        description: error.message || "No se pudo iniciar sesión con Google.",
+        variant: "destructive",
+      });
+    }
   };
 
   if (user) {
