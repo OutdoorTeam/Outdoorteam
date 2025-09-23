@@ -5,6 +5,8 @@ import path from 'path';
 export const vitePort = 3000;
 
 export default defineConfig(({ mode }) => {
+  const isCapacitor = process.env.CAPACITOR === 'true';
+
   return {
     plugins: [
       react(),
@@ -60,6 +62,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     root: path.join(process.cwd(), 'client'),
+    base: isCapacitor ? './' : '/',
     build: {
       outDir: path.join(process.cwd(), 'dist/public'),
       emptyOutDir: true,
