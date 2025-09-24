@@ -55,7 +55,7 @@ router.post('/content-library',
           category,
           subcategory: subcategory || null,
           is_active: 1,
-          created_at: new Date().toISOString()
+          created_at: new Date()
         })
         .returning(['id', 'title', 'category'])
         .executeTakeFirst();
@@ -94,7 +94,7 @@ router.put('/content-library/:id',
           subcategory: subcategory || null,
           is_active: is_active ? 1 : 0
         })
-        .where('id', '=', parseInt(id))
+        .where('id', '=', String(id))
         .returning(['id', 'title', 'category'])
         .executeTakeFirst();
       
@@ -124,13 +124,13 @@ router.delete('/content-library/:id', authenticateToken, requireAdmin, async (re
     
     await db
       .deleteFrom('content_library')
-      .where('id', '=', parseInt(id))
+      .where('id', '=', String(id))
       .execute();
     
     await SystemLogger.log('info', 'Content deleted', {
       userId: req.user.id,
       req,
-      metadata: { content_id: parseInt(id) }
+      metadata: { content_id: String(id) }
     });
     
     res.json({ message: 'Contenido eliminado exitosamente' });
@@ -177,7 +177,7 @@ router.post('/broadcast',
         .values({
           sender_id: senderId,
           message,
-          created_at: new Date().toISOString()
+          created_at: new Date()
         })
         .returning(['id', 'message', 'created_at'])
         .executeTakeFirst();

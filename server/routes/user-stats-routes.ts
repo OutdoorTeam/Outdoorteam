@@ -10,9 +10,9 @@ const router = express.Router();
 router.get('/stats/user/:userId', authenticateToken, async (req: any, res: express.Response) => {
   try {
     const { userId } = req.params;
-    const requestingUserId = req.user.id;
+    const requestingUserId = String(req.user.id);
     const requestingUserRole = req.user.role;
-    const targetUserId = parseInt(userId);
+    const targetUserId = String(userId);
 
     // Users can only access their own stats unless they're admin
     if (requestingUserRole !== 'admin' && targetUserId !== requestingUserId) {

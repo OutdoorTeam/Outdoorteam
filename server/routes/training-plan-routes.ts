@@ -14,7 +14,7 @@ router.get('/training-plan/:userId', authenticateToken, async (req: any, res) =>
     const requestingUserRole = req.user.role;
 
     // Users can only access their own plans unless they're admin
-    if (requestingUserRole !== 'admin' && parseInt(userId) !== requestingUserId) {
+    if (requestingUserRole !== 'admin' && String(userId) !== String(requestingUserId)) {
       sendErrorResponse(res, ERROR_CODES.AUTHORIZATION_ERROR, 'Acceso denegado');
       return;
     }
@@ -25,7 +25,7 @@ router.get('/training-plan/:userId', authenticateToken, async (req: any, res) =>
     let planQuery = db
       .selectFrom('training_plans')
       .selectAll()
-      .where('user_id', '=', parseInt(userId));
+      .where('user_id', '=', String(userId));
 
     if (requestingUserRole === 'admin') {
       planQuery = planQuery.orderBy('version', 'desc').orderBy('updated_at', 'desc');
@@ -40,7 +40,7 @@ router.get('/training-plan/:userId', authenticateToken, async (req: any, res) =>
       const legacyPdf = await db
         .selectFrom('user_files')
         .selectAll()
-        .where('user_id', '=', parseInt(userId))
+        .where('user_id', '=', String(userId))
         .where('file_type', '=', 'training')
         .orderBy('created_at', 'desc')
         .executeTakeFirst();
@@ -98,7 +98,7 @@ router.get('/training-plan/:userId', authenticateToken, async (req: any, res) =>
     const legacyPdf = await db
       .selectFrom('user_files')
       .selectAll()
-      .where('user_id', '=', parseInt(userId))
+      .where('user_id', '=', String(userId))
       .where('file_type', '=', 'training')
       .orderBy('created_at', 'desc')
       .executeTakeFirst();
@@ -127,7 +127,7 @@ router.post('/training-plan/:userId/draft', authenticateToken, requireAdmin, asy
     const existingDraft = await db
       .selectFrom('training_plans')
       .selectAll()
-      .where('user_id', '=', parseInt(userId))
+      .where('user_id', '=', String(userId))
       .where('status', '=', 'draft')
       .executeTakeFirst();
 
@@ -140,17 +140,17 @@ router.post('/training-plan/:userId/draft', authenticateToken, requireAdmin, asy
     const latestPlan = await db
       .selectFrom('training_plans')
       .selectAll()
-      .where('user_id', '=', parseInt(userId))
+      .where('user_id', '=', String(userId))
       .orderBy('version', 'desc')
       .executeTakeFirst();
 
-    const now = new Date().toISOString();
+    const now = new Date();
     const newVersion = latestPlan ? latestPlan.version : 1;
 
     const newDraft = await db
       .insertInto('training_plans')
       .values({
-        user_id: parseInt(userId),
+        user_id: String(userId),
         title: `Plan de Entrenamiento v${newVersion}`,
         version: newVersion,
         status: 'draft',
@@ -163,7 +163,7 @@ router.post('/training-plan/:userId/draft', authenticateToken, requireAdmin, asy
 
     await SystemLogger.log('info', 'Training plan draft created', {
       userId: adminId,
-      metadata: { target_user_id: parseInt(userId), plan_id: newDraft?.id }
+      metadata: { target_user_id: String(userId), plan_id: newDraft?.id }
     });
 
     res.json(newDraft);
@@ -186,7 +186,7 @@ router.post('/training-plan/user/:userId/ensure-draft', authenticateToken, requi
     const existingDraft = await db
       .selectFrom('training_plans')
       .selectAll()
-      .where('user_id', '=', parseInt(userId))
+      .where('user_id', '=', String(userId))
       .where('status', '=', 'draft')
       .executeTakeFirst();
 
@@ -199,17 +199,17 @@ router.post('/training-plan/user/:userId/ensure-draft', authenticateToken, requi
     const latestPlan = await db
       .selectFrom('training_plans')
       .selectAll()
-      .where('user_id', '=', parseInt(userId))
+      .where('user_id', '=', String(userId))
       .orderBy('version', 'desc')
       .executeTakeFirst();
 
-    const now = new Date().toISOString();
+    const now = new Date();
     const newVersion = (latestPlan ? latestPlan.version : 0) + 1;
 
     const newDraft = await db
       .insertInto('training_plans')
       .values({
-        user_id: parseInt(userId),
+        user_id: String(userId),
         title: `Plan de Entrenamiento v${newVersion}`,
         version: newVersion,
         status: 'draft',
@@ -222,7 +222,7 @@ router.post('/training-plan/user/:userId/ensure-draft', authenticateToken, requi
 
     await SystemLogger.log('info', 'Training plan draft ensured', {
       userId: adminId,
-      metadata: { target_user_id: parseInt(userId), plan_id: newDraft?.id }
+      metadata: { target_user_id: String(userId), plan_id: newDraft?.id }
     });
 
     res.json(newDraft);
@@ -247,7 +247,7 @@ router.put('/training-plan/:planId', authenticateToken, requireAdmin, async (req
       return;
     }
 
-    const now = new Date().toISOString();
+    const now = new Date();
     let updateData: any = { updated_at: now };
 
     if (title !== undefined) updateData.title = title;
@@ -256,7 +256,7 @@ router.put('/training-plan/:planId', authenticateToken, requireAdmin, async (req
     const result = await db
       .updateTable('training_plans')
       .set(updateData)
-      .where('id', '=', parseInt(planId))
+      .where('id', '=', String(planId))
       .returning(['id', 'title', 'version', 'status'])
       .executeTakeFirst();
 
@@ -267,7 +267,7 @@ router.put('/training-plan/:planId', authenticateToken, requireAdmin, async (req
 
     await SystemLogger.log('info', 'Training plan updated', {
       userId: req.user.id,
-      metadata: { plan_id: parseInt(planId), status }
+      metadata: { plan_id: String(planId), status }
     });
 
     res.json(result);
@@ -296,7 +296,7 @@ router.post('/training-plan/:planId/days', authenticateToken, requireAdmin, asyn
     const existingDay = await db
       .selectFrom('training_plan_days')
       .selectAll()
-      .where('plan_id', '=', parseInt(planId))
+      .where('plan_id', '=', String(planId))
       .where('day_index', '=', day_index)
       .executeTakeFirst();
 
@@ -318,7 +318,7 @@ router.post('/training-plan/:planId/days', authenticateToken, requireAdmin, asyn
       result = await db
         .insertInto('training_plan_days')
         .values({
-          plan_id: parseInt(planId),
+          plan_id: String(planId),
           day_index,
           title: title || `Día ${day_index}`,
           notes: notes || null,
@@ -357,23 +357,23 @@ router.post('/training-plan/days/:dayId/exercises', authenticateToken, requireAd
     console.log('Adding/updating exercise for day:', dayId, 'body:', req.body);
 
     // CRITICAL: Validate dayId is present and valid
-    if (!dayId || isNaN(parseInt(dayId))) {
+    if (!dayId) {
       console.error('Invalid or missing dayId:', dayId);
       sendErrorResponse(res, ERROR_CODES.VALIDATION_ERROR, 'ID de día inválido o faltante');
       return;
     }
 
-    const parsedDayId = parseInt(dayId);
+    const targetDayId = String(dayId);
     
     // Verify the day exists
     const dayExists = await db
       .selectFrom('training_plan_days')
       .select(['id'])
-      .where('id', '=', parsedDayId)
+      .where('id', '=', targetDayId)
       .executeTakeFirst();
 
     if (!dayExists) {
-      console.error('Day not found with ID:', parsedDayId);
+      console.error('Day not found with ID:', targetDayId);
       sendErrorResponse(res, ERROR_CODES.NOT_FOUND_ERROR, 'Día del plan no encontrado');
       return;
     }
@@ -398,7 +398,7 @@ router.post('/training-plan/days/:dayId/exercises', authenticateToken, requireAd
     }
 
     const exerciseData = {
-      day_id: parsedDayId, // Ensure this is a valid integer
+      day_id: targetDayId, // Ensure this is a valid identifier
       exercise_name: exercise_name.trim(),
       content_library_id: content_library_id || null,
       youtube_url: youtube_url || null,
@@ -419,7 +419,7 @@ router.post('/training-plan/days/:dayId/exercises', authenticateToken, requireAd
       result = await db
         .updateTable('training_exercises')
         .set(exerciseData)
-        .where('id', '=', parseInt(id))
+        .where('id', '=', String(id))
         .returning([
           'id', 'exercise_name', 'content_library_id', 'youtube_url',
           'sets', 'reps', 'intensity', 'rest_seconds', 'tempo', 'notes', 'sort_order'
@@ -457,7 +457,7 @@ router.post('/training-plan/:planId/publish', authenticateToken, requireAdmin, a
     const currentPlan = await db
       .selectFrom('training_plans')
       .selectAll()
-      .where('id', '=', parseInt(planId))
+      .where('id', '=', String(planId))
       .executeTakeFirst();
 
     if (!currentPlan) {
@@ -465,7 +465,7 @@ router.post('/training-plan/:planId/publish', authenticateToken, requireAdmin, a
       return;
     }
 
-    const now = new Date().toISOString();
+    const now = new Date();
     const newVersion = currentPlan.version + 1;
 
     // Update to published status with incremented version
@@ -476,13 +476,13 @@ router.post('/training-plan/:planId/publish', authenticateToken, requireAdmin, a
         version: newVersion,
         updated_at: now
       })
-      .where('id', '=', parseInt(planId))
+      .where('id', '=', String(planId))
       .returning(['id', 'title', 'version', 'status'])
       .executeTakeFirst();
 
     await SystemLogger.log('info', 'Training plan published', {
       userId: req.user.id,
-      metadata: { plan_id: parseInt(planId), version: newVersion }
+      metadata: { plan_id: String(planId), version: newVersion }
     });
 
     res.json(result);
@@ -502,7 +502,7 @@ router.delete('/training-plan/exercises/:exerciseId', authenticateToken, require
 
     await db
       .deleteFrom('training_exercises')
-      .where('id', '=', parseInt(exerciseId))
+      .where('id', '=', String(exerciseId))
       .execute();
 
     res.json({ success: true });

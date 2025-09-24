@@ -14,7 +14,7 @@ router.get('/nutrition-plan/:userId', authenticateToken, async (req: any, res) =
     const requestingUserRole = req.user.role;
 
     // Users can only access their own plans unless they're admin
-    if (requestingUserRole !== 'admin' && parseInt(userId) !== requestingUserId) {
+    if (requestingUserRole !== 'admin' && String(userId) !== String(requestingUserId)) {
       sendErrorResponse(res, ERROR_CODES.AUTHORIZATION_ERROR, 'Acceso denegado');
       return;
     }
@@ -25,7 +25,7 @@ router.get('/nutrition-plan/:userId', authenticateToken, async (req: any, res) =
     let query = db
       .selectFrom('nutrition_plans')
       .selectAll()
-      .where('user_id', '=', parseInt(userId));
+      .where('user_id', '=', String(userId));
 
     if (requestingUserRole === 'admin') {
       // Admin sees latest version regardless of status
@@ -41,7 +41,7 @@ router.get('/nutrition-plan/:userId', authenticateToken, async (req: any, res) =
     const legacyPdf = await db
       .selectFrom('user_files')
       .selectAll()
-      .where('user_id', '=', parseInt(userId))
+      .where('user_id', '=', String(userId))
       .where('file_type', '=', 'nutrition')
       .orderBy('created_at', 'desc')
       .executeTakeFirst();
@@ -76,11 +76,11 @@ router.put('/nutrition-plan/:userId', authenticateToken, requireAdmin, async (re
     const currentPlan = await db
       .selectFrom('nutrition_plans')
       .selectAll()
-      .where('user_id', '=', parseInt(userId))
+      .where('user_id', '=', String(userId))
       .orderBy('version', 'desc')
       .executeTakeFirst();
 
-    const now = new Date().toISOString();
+    const now = new Date();
     let newVersion = 1;
 
     // If publishing, increment version
@@ -95,7 +95,7 @@ router.put('/nutrition-plan/:userId', authenticateToken, requireAdmin, async (re
     }
 
     const planData = {
-      user_id: parseInt(userId),
+      user_id: String(userId),
       content_md: content_md || null,
       version: newVersion,
       status,
@@ -130,7 +130,7 @@ router.put('/nutrition-plan/:userId', authenticateToken, requireAdmin, async (re
 
     await SystemLogger.log('info', 'Nutrition plan updated', {
       userId: adminId,
-      metadata: { target_user_id: parseInt(userId), status, version: result?.version }
+      metadata: { target_user_id: String(userId), status, version: result?.version }
     });
 
     res.json(result);

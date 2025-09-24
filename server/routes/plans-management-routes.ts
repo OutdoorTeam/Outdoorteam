@@ -71,9 +71,9 @@ router.put('/plans-management/:id', authenticateToken, requireAdmin, async (req:
         services_included: JSON.stringify(services_included),
         features_json: JSON.stringify(features_json || {}),
         is_active: is_active ? 1 : 0,
-        updated_at: new Date().toISOString()
+        updated_at: new Date()
       })
-      .where('id', '=', parseInt(id))
+      .where('id', '=', String(id))
       .returning(['id', 'name', 'description', 'price', 'services_included', 'features_json', 'is_active'])
       .executeTakeFirst();
 
@@ -84,7 +84,7 @@ router.put('/plans-management/:id', authenticateToken, requireAdmin, async (req:
 
     await SystemLogger.log('info', 'Plan updated', {
       userId: req.user.id,
-      metadata: { plan_id: parseInt(id), name, price }
+      metadata: { plan_id: String(id), name, price }
     });
 
     const formattedPlan = {
@@ -146,8 +146,8 @@ router.post('/plans-management', authenticateToken, requireAdmin, async (req: an
           active_breaks: true
         }),
         is_active: 1,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        created_at: new Date(),
+        updated_at: new Date()
       })
       .returning(['id', 'name', 'description', 'price', 'services_included', 'features_json', 'is_active'])
       .executeTakeFirst();
@@ -190,7 +190,7 @@ router.delete('/plans-management/:id', authenticateToken, requireAdmin, async (r
       .selectFrom('users')
       .select('id')
       .where('plan_type', '=', (
-        db.selectFrom('plans').select('name').where('id', '=', parseInt(id))
+        db.selectFrom('plans').select('name').where('id', '=', String(id))
       ))
       .limit(1)
       .execute();
@@ -202,7 +202,7 @@ router.delete('/plans-management/:id', authenticateToken, requireAdmin, async (r
 
     const deletedPlan = await db
       .deleteFrom('plans')
-      .where('id', '=', parseInt(id))
+      .where('id', '=', String(id))
       .returning(['id', 'name'])
       .executeTakeFirst();
 

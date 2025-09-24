@@ -1,0 +1,25 @@
+# Node/Vite
+node_modules/
+dist/
+build/
+*.log
+
+# Env
+.env
+.env.local
+*.env.*
+
+# Capacitor / plataformas nativas
+android/
+ios/
+
+# Salidas, cache y editor
+.vite/
+.cache/
+coverage/
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Archivos generados/temporal
+uploads/

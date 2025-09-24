@@ -5,7 +5,10 @@ import path from 'path';
 
 dotenv.config();
 
-const migrationSql = fs.readFileSync(path.join(process.cwd(), 'scripts', 'migration.sql'), 'utf8');
+const migrationSql = fs.readFileSync(
+  path.join(process.cwd(), 'scripts', 'migration.sql'),
+  'utf8'
+);
 
 async function runMigrations() {
   if (process.env.FEATURE_MIGRATIONS === 'false' && process.argv[2] !== '--force') {
@@ -16,6 +19,8 @@ async function runMigrations() {
   console.log('Connecting to database to run migrations...');
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
+    // Evita el error SELF_SIGNED_CERT_IN_CHAIN con el pooler de Supabase
+    ssl: { rejectUnauthorized: false },
   });
 
   const client = await pool.connect();

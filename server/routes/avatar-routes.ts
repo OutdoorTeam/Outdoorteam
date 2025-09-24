@@ -55,7 +55,7 @@ router.get('/avatar', authenticateToken, async (req: any, res) => {
       // Update vitality level if it has changed
       avatar = await db
         .updateTable('user_avatars')
-        .set({ vitality_level: vitalityLevel, updated_at: new Date().toISOString() })
+        .set({ vitality_level: vitalityLevel, updated_at: new Date() })
         .where('user_id', '=', userId)
         .returningAll()
         .executeTakeFirstOrThrow();
@@ -88,7 +88,7 @@ router.put('/avatar', authenticateToken, async (req: any, res) => {
 
     console.log('Updating avatar for user:', userId, 'with data:', req.body);
 
-    const updateData: any = { updated_at: new Date().toISOString() };
+    const updateData: any = { updated_at: new Date() };
     if (gender) updateData.gender = gender;
     if (skin_tone) updateData.skin_tone = skin_tone;
     if (hair_style) updateData.hair_style = hair_style;

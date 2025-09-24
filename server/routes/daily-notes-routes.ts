@@ -116,7 +116,7 @@ router.post('/daily-notes', authenticateToken, async (req: any, res) => {
           user_id: userId,
           content: content.trim(),
           date: noteDate,
-          created_at: new Date().toISOString()
+          created_at: new Date()
         })
         .returning(['id', 'user_id', 'content', 'date', 'created_at'])
         .executeTakeFirst();

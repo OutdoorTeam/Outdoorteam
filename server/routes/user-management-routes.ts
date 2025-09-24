@@ -10,7 +10,7 @@ const router = express.Router();
 router.get('/users/:id/permissions', authenticateToken, requireAdmin, async (req: any, res: express.Response) => {
   try {
     const { id } = req.params;
-    const userId = parseInt(id);
+    const userId = String(id);
 
     console.log('Admin fetching permissions for user:', userId);
 
@@ -32,8 +32,8 @@ router.get('/users/:id/permissions', authenticateToken, requireAdmin, async (req
           meditation_enabled: 1,
           active_breaks_enabled: 1,
           exercises_enabled: 1,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          created_at: new Date(),
+          updated_at: new Date()
         })
         .returning(['id', 'user_id', 'dashboard_enabled', 'training_enabled', 'nutrition_enabled', 'meditation_enabled', 'active_breaks_enabled', 'exercises_enabled'])
         .executeTakeFirst();
@@ -54,7 +54,7 @@ router.get('/users/:id/permissions', authenticateToken, requireAdmin, async (req
 router.put('/users/:id/permissions', authenticateToken, requireAdmin, async (req: any, res: express.Response) => {
   try {
     const { id } = req.params;
-    const userId = parseInt(id);
+    const userId = String(id);
     const {
       dashboard_enabled,
       training_enabled,
@@ -75,7 +75,7 @@ router.put('/users/:id/permissions', authenticateToken, requireAdmin, async (req
         meditation_enabled: meditation_enabled ? 1 : 0,
         active_breaks_enabled: active_breaks_enabled ? 1 : 0,
         exercises_enabled: exercises_enabled ? 1 : 0,
-        updated_at: new Date().toISOString()
+        updated_at: new Date()
       })
       .where('user_id', '=', userId)
       .returning(['id', 'user_id', 'dashboard_enabled', 'training_enabled', 'nutrition_enabled', 'meditation_enabled', 'active_breaks_enabled', 'exercises_enabled'])
@@ -93,8 +93,8 @@ router.put('/users/:id/permissions', authenticateToken, requireAdmin, async (req
           meditation_enabled: meditation_enabled ? 1 : 0,
           active_breaks_enabled: active_breaks_enabled ? 1 : 0,
           exercises_enabled: exercises_enabled ? 1 : 0,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          created_at: new Date(),
+          updated_at: new Date()
         })
         .returning(['id', 'user_id', 'dashboard_enabled', 'training_enabled', 'nutrition_enabled', 'meditation_enabled', 'active_breaks_enabled', 'exercises_enabled'])
         .executeTakeFirst();
@@ -120,7 +120,7 @@ router.put('/users/:id/permissions', authenticateToken, requireAdmin, async (req
 router.get('/users/:id/goals', authenticateToken, requireAdmin, async (req: any, res: express.Response) => {
   try {
     const { id } = req.params;
-    const userId = parseInt(id);
+    const userId = String(id);
 
     console.log('Admin fetching goals for user:', userId);
 
@@ -138,8 +138,8 @@ router.get('/users/:id/goals', authenticateToken, requireAdmin, async (req: any,
           user_id: userId,
           daily_steps_goal: 8000,
           weekly_points_goal: 28,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          created_at: new Date(),
+          updated_at: new Date()
         })
         .returning(['id', 'user_id', 'daily_steps_goal', 'weekly_points_goal'])
         .executeTakeFirst();
@@ -160,7 +160,7 @@ router.get('/users/:id/goals', authenticateToken, requireAdmin, async (req: any,
 router.put('/users/:id/goals', authenticateToken, requireAdmin, async (req: any, res: express.Response) => {
   try {
     const { id } = req.params;
-    const userId = parseInt(id);
+    const userId = String(id);
     const { daily_steps_goal, weekly_points_goal } = req.body;
 
     console.log('Admin updating goals for user:', userId, 'data:', req.body);
@@ -181,7 +181,7 @@ router.put('/users/:id/goals', authenticateToken, requireAdmin, async (req: any,
       .set({
         daily_steps_goal: daily_steps_goal || 8000,
         weekly_points_goal: weekly_points_goal || 28,
-        updated_at: new Date().toISOString()
+        updated_at: new Date()
       })
       .where('user_id', '=', userId)
       .returning(['id', 'user_id', 'daily_steps_goal', 'weekly_points_goal'])
@@ -195,8 +195,8 @@ router.put('/users/:id/goals', authenticateToken, requireAdmin, async (req: any,
           user_id: userId,
           daily_steps_goal: daily_steps_goal || 8000,
           weekly_points_goal: weekly_points_goal || 28,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          created_at: new Date(),
+          updated_at: new Date()
         })
         .returning(['id', 'user_id', 'daily_steps_goal', 'weekly_points_goal'])
         .executeTakeFirst();
@@ -222,7 +222,7 @@ router.put('/users/:id/goals', authenticateToken, requireAdmin, async (req: any,
 router.get('/users/:id/today-habits', authenticateToken, requireAdmin, async (req: any, res: express.Response) => {
   try {
     const { id } = req.params;
-    const userId = parseInt(id);
+    const userId = String(id);
     const today = new Date().toISOString().split('T')[0];
 
     console.log('Admin fetching today habits for user:', userId, 'date:', today);
@@ -260,7 +260,7 @@ router.get('/users/:id/today-habits', authenticateToken, requireAdmin, async (re
 router.get('/users/:id/step-history', authenticateToken, requireAdmin, async (req: any, res: express.Response) => {
   try {
     const { id } = req.params;
-    const userId = parseInt(id);
+    const userId = String(id);
     const { days = 30 } = req.query;
     
     const daysBack = parseInt(days as string);

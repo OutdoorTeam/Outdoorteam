@@ -34,12 +34,13 @@ router.get('/daily-habits/today', authenticateToken, async (req: any, res) => {
           meditation_completed: 0,
           daily_points: 0,
           steps: 0,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          created_at: new Date(),
+          updated_at: new Date()
         })
         .returning([
-          'id', 'user_id', 'date', 'training_completed', 'nutrition_completed', 
-          'movement_completed', 'meditation_completed', 'daily_points', 'steps'
+          'id','user_id','date','training_completed','nutrition_completed',
+          'movement_completed','meditation_completed','daily_points','steps',
+          'created_at','updated_at'
         ])
         .executeTakeFirst();
     }
@@ -147,7 +148,7 @@ router.put('/daily-habits/update', authenticateToken, async (req: any, res) => {
       .executeTakeFirst();
 
     const updateData: any = {
-      updated_at: new Date().toISOString()
+      updated_at: new Date()
     };
 
     // Update fields that were provided
@@ -177,8 +178,9 @@ router.put('/daily-habits/update', authenticateToken, async (req: any, res) => {
         .where('user_id', '=', userId)
         .where('date', '=', date)
         .returning([
-          'id', 'user_id', 'date', 'training_completed', 'nutrition_completed',
-          'movement_completed', 'meditation_completed', 'daily_points', 'steps'
+          'id','user_id','date','training_completed','nutrition_completed',
+          'movement_completed','meditation_completed','daily_points','steps',
+          'created_at','updated_at'
         ])
         .executeTakeFirst();
     } else {
@@ -194,12 +196,13 @@ router.put('/daily-habits/update', authenticateToken, async (req: any, res) => {
           meditation_completed: updateData.meditation_completed || 0,
           daily_points: dailyPoints,
           steps: updateData.steps || 0,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          created_at: new Date(),
+          updated_at: new Date()
         })
         .returning([
-          'id', 'user_id', 'date', 'training_completed', 'nutrition_completed',
-          'movement_completed', 'meditation_completed', 'daily_points', 'steps'
+          'id','user_id','date','training_completed','nutrition_completed',
+          'movement_completed','meditation_completed','daily_points','steps',
+          'created_at','updated_at'
         ])
         .executeTakeFirst();
     }

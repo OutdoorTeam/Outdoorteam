@@ -1,5 +1,4 @@
-
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { db } from '../database.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { sendErrorResponse, ERROR_CODES } from '../utils/validation.js';
@@ -9,19 +8,22 @@ import { supabaseAdmin } from '../supabase.js';
 const router = Router();
 
 // This route is a webhook to sync a new Supabase user to our public.users table
-router.post('/sync-user', async (req, res) => {
+router.post('/sync-user', async (req: Request, res: Response): Promise<void> => {
   if (!db) {
-    return res.status(503).send('Database service unavailable');
+    res.status(503).send('Database service unavailable');
+    return;
   }
   // A simple auth mechanism for the webhook, can be improved
   if (req.headers['x-internal-secret'] !== process.env.INTERNAL_API_KEY) {
-    return res.status(401).send('Unauthorized');
+    res.status(401).send('Unauthorized');
+    return;
   }
 
   const { record: user } = req.body; // Supabase webhook sends user data in `record`
 
   if (!user || !user.id || !user.email) {
-    return res.status(400).send('Invalid user data');
+    res.status(400).send('Invalid user data');
+    return;
   }
 
   try {
@@ -66,11 +68,11 @@ router.post('/sync-user', async (req, res) => {
   }
 });
 
-
 // Change password for authenticated user
-router.post('/change-password', authenticateToken, async (req: any, res) => {
+router.post('/change-password', authenticateToken, async (req: any, res: Response): Promise<void> => {
   if (!supabaseAdmin) {
-    return sendErrorResponse(res, ERROR_CODES.SERVER_ERROR, 'Auth service is not configured.');
+    sendErrorResponse(res, ERROR_CODES.SERVER_ERROR, 'Auth service is not configured.');
+    return;
   }
   try {
     const userId = req.user.id; // Use user ID from our token

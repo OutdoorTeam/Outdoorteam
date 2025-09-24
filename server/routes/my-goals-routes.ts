@@ -27,8 +27,8 @@ router.get('/my-goals', authenticateToken, async (req: any, res) => {
           user_id: userId,
           daily_steps_goal: 8000,
           weekly_points_goal: 28,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          created_at: new Date(),
+          updated_at: new Date()
         })
         .returning(['id', 'user_id', 'daily_steps_goal', 'weekly_points_goal', 'created_at', 'updated_at'])
         .executeTakeFirst();
@@ -63,7 +63,7 @@ router.put('/my-goals', authenticateToken, async (req: any, res) => {
     }
 
     const updateData: any = {
-      updated_at: new Date().toISOString()
+      updated_at: new Date()
     };
 
     if (daily_steps_goal !== undefined) {
@@ -98,8 +98,8 @@ router.put('/my-goals', authenticateToken, async (req: any, res) => {
           user_id: userId,
           daily_steps_goal: daily_steps_goal || 8000,
           weekly_points_goal: weekly_points_goal || 28,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          created_at: new Date(),
+          updated_at: new Date()
         })
         .returning(['id', 'user_id', 'daily_steps_goal', 'weekly_points_goal', 'created_at', 'updated_at'])
         .executeTakeFirst();

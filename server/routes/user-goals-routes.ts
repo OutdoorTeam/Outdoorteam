@@ -16,7 +16,7 @@ router.get('/users/:userId/goals', authenticateToken, requireAdmin, async (req: 
     let goals = await db
       .selectFrom('user_goals')
       .selectAll()
-      .where('user_id', '=', parseInt(userId))
+      .where('user_id', '=', String(userId))
       .executeTakeFirst();
 
     if (!goals) {
@@ -24,11 +24,11 @@ router.get('/users/:userId/goals', authenticateToken, requireAdmin, async (req: 
       goals = await db
         .insertInto('user_goals')
         .values({
-          user_id: parseInt(userId),
+          user_id: String(userId),
           daily_steps_goal: 8000,
           weekly_points_goal: 28,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          created_at: new Date(),
+          updated_at: new Date()
         })
         .returning(['id', 'user_id', 'daily_steps_goal', 'weekly_points_goal', 'created_at', 'updated_at'])
         .executeTakeFirst();
@@ -65,7 +65,7 @@ router.put('/users/:userId/goals', authenticateToken, requireAdmin, async (req: 
     const user = await db
       .selectFrom('users')
       .select(['id', 'email'])
-      .where('id', '=', parseInt(userId))
+      .where('id', '=', String(userId))
       .executeTakeFirst();
 
     if (!user) {
@@ -74,7 +74,7 @@ router.put('/users/:userId/goals', authenticateToken, requireAdmin, async (req: 
     }
 
     const updateData: any = {
-      updated_at: new Date().toISOString()
+      updated_at: new Date()
     };
 
     if (daily_steps_goal !== undefined) {
@@ -89,7 +89,7 @@ router.put('/users/:userId/goals', authenticateToken, requireAdmin, async (req: 
     const existingGoals = await db
       .selectFrom('user_goals')
       .select(['id'])
-      .where('user_id', '=', parseInt(userId))
+      .where('user_id', '=', String(userId))
       .executeTakeFirst();
 
     let result;
@@ -98,7 +98,7 @@ router.put('/users/:userId/goals', authenticateToken, requireAdmin, async (req: 
       result = await db
         .updateTable('user_goals')
         .set(updateData)
-        .where('user_id', '=', parseInt(userId))
+        .where('user_id', '=', String(userId))
         .returning(['id', 'user_id', 'daily_steps_goal', 'weekly_points_goal', 'created_at', 'updated_at'])
         .executeTakeFirst();
     } else {
@@ -106,11 +106,11 @@ router.put('/users/:userId/goals', authenticateToken, requireAdmin, async (req: 
       result = await db
         .insertInto('user_goals')
         .values({
-          user_id: parseInt(userId),
+          user_id: String(userId),
           daily_steps_goal: daily_steps_goal || 8000,
           weekly_points_goal: weekly_points_goal || 28,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          created_at: new Date(),
+          updated_at: new Date()
         })
         .returning(['id', 'user_id', 'daily_steps_goal', 'weekly_points_goal', 'created_at', 'updated_at'])
         .executeTakeFirst();
@@ -120,7 +120,7 @@ router.put('/users/:userId/goals', authenticateToken, requireAdmin, async (req: 
     await SystemLogger.log('info', 'User goals updated by admin', {
       userId: req.user.id,
       metadata: { 
-        target_user_id: parseInt(userId),
+        target_user_id: String(userId),
         daily_steps_goal: result?.daily_steps_goal,
         weekly_points_goal: result?.weekly_points_goal
       }

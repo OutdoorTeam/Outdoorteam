@@ -10,11 +10,11 @@ const router = Router();
 router.get('/users/:userId/training-schedule', authenticateToken, async (req: any, res) => {
   try {
     const { userId } = req.params;
-    const requestingUserId = req.user.id;
+    const requestingUserId = String(req.user.id);
     const isAdmin = req.user.role === 'admin';
 
     // For user's own schedule, support "me" as userId
-    const targetUserId = userId === 'me' ? requestingUserId : parseInt(userId);
+    const targetUserId = userId === 'me' ? requestingUserId : String(userId);
 
     // Users can only view their own schedule unless admin
     if (!isAdmin && targetUserId !== requestingUserId) {
@@ -112,7 +112,7 @@ router.post('/users/:userId/training-schedule', authenticateToken, requireAdmin,
     const user = await db
       .selectFrom('users')
       .select(['id', 'email'])
-      .where('id', '=', parseInt(userId))
+      .where('id', '=', String(userId))
       .executeTakeFirst();
 
     if (!user) {
@@ -126,9 +126,9 @@ router.post('/users/:userId/training-schedule', authenticateToken, requireAdmin,
         .updateTable('training_plan_schedules')
         .set({ 
           status: 'completed',
-          updated_at: new Date().toISOString()
+          updated_at: new Date()
         })
-        .where('user_id', '=', parseInt(userId))
+        .where('user_id', '=', String(userId))
         .where('status', '=', 'active')
         .execute();
 
@@ -136,13 +136,13 @@ router.post('/users/:userId/training-schedule', authenticateToken, requireAdmin,
       const schedule = await trx
         .insertInto('training_plan_schedules')
         .values({
-          user_id: parseInt(userId),
+          user_id: String(userId),
           plan_title,
           week_number: 1,
           status: 'active',
           created_by: req.user.id,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          created_at: new Date(),
+          updated_at: new Date()
         })
         .returning(['id'])
         .executeTakeFirst();
@@ -184,7 +184,7 @@ router.post('/users/:userId/training-schedule', authenticateToken, requireAdmin,
     await SystemLogger.log('info', 'Training schedule created', {
       userId: req.user.id,
       metadata: { 
-        target_user_id: parseInt(userId),
+        target_user_id: String(userId),
         plan_title
       }
     });
@@ -224,7 +224,7 @@ router.put('/training-exercises/:exerciseId', authenticateToken, requireAdmin, a
     const updatedExercise = await db
       .updateTable('training_plan_exercises')
       .set(updateFields)
-      .where('id', '=', parseInt(exerciseId))
+      .where('id', '=', String(exerciseId))
       .returning(['id', 'exercise_name'])
       .executeTakeFirst();
 
@@ -237,7 +237,7 @@ router.put('/training-exercises/:exerciseId', authenticateToken, requireAdmin, a
     await SystemLogger.log('info', 'Training exercise updated', {
       userId: req.user.id,
       metadata: { 
-        exercise_id: parseInt(exerciseId),
+        exercise_id: String(exerciseId),
         exercise_name: updatedExercise.exercise_name
       }
     });
@@ -260,13 +260,13 @@ router.delete('/training-exercises/:exerciseId', authenticateToken, requireAdmin
 
     await db
       .deleteFrom('training_plan_exercises')
-      .where('id', '=', parseInt(exerciseId))
+      .where('id', '=', String(exerciseId))
       .execute();
 
     console.log('Exercise deleted successfully');
     await SystemLogger.log('info', 'Training exercise deleted', {
       userId: req.user.id,
-      metadata: { exercise_id: parseInt(exerciseId) }
+      metadata: { exercise_id: String(exerciseId) }
     });
 
     res.json({ message: 'Ejercicio eliminado exitosamente' });

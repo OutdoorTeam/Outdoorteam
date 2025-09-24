@@ -10,16 +10,16 @@ const router = Router();
 router.get('/users/:id/stats', authenticateToken, async (req: any, res) => {
   try {
     const { id } = req.params;
-    const requestingUserId = req.user.id;
+    const requestingUserId = String(req.user.id);
     const requestingUserRole = req.user.role;
 
     // Users can only view their own stats unless they're admin
-    if (requestingUserRole !== 'admin' && parseInt(id) !== requestingUserId) {
+    if (requestingUserRole !== 'admin' && id !== requestingUserId) {
       sendErrorResponse(res, ERROR_CODES.AUTHORIZATION_ERROR, 'Acceso denegado');
       return;
     }
 
-    const userId = parseInt(id);
+    const userId = String(id);
     console.log('Fetching statistics for user:', userId);
 
     // Calculate date ranges
@@ -49,7 +49,7 @@ router.get('/users/:id/stats', authenticateToken, async (req: any, res) => {
       .selectFrom('meditation_sessions')
       .select(['completed_at', 'duration_minutes'])
       .where('user_id', '=', userId)
-      .where('completed_at', '>=', weekStart.toISOString())
+      .where('completed_at', '>=', weekStart)
       .execute();
 
     // Monthly data - last 30 days
@@ -65,7 +65,7 @@ router.get('/users/:id/stats', authenticateToken, async (req: any, res) => {
       .selectFrom('meditation_sessions')
       .select(['completed_at', 'duration_minutes'])
       .where('user_id', '=', userId)
-      .where('completed_at', '>=', monthStart.toISOString())
+      .where('completed_at', '>=', monthStart)
       .execute();
 
     // Process weekly data
@@ -101,9 +101,10 @@ function processWeeklyStats(weeklyHabits: any[], weeklyMeditation: any[], weekSt
   // Create daily data structure
   const dailyData = days.map(date => {
     const dayData = weeklyHabits.find(h => h.date === date);
-    const dayMeditation = weeklyMeditation.filter(m => 
-      m.completed_at.split('T')[0] === date
-    );
+    const dayMeditation = weeklyMeditation.filter((m: any) => {
+      const c = m.completed_at instanceof Date ? m.completed_at.toISOString() : m.completed_at;
+      return c.split('T')[0] === date;
+    });
 
     return {
       date,
@@ -114,7 +115,7 @@ function processWeeklyStats(weeklyHabits: any[], weeklyMeditation: any[], weekSt
       movement: dayData?.movement_completed || 0,
       meditation: dayData?.meditation_completed || 0,
       meditationSessions: dayMeditation.length,
-      meditationMinutes: dayMeditation.reduce((sum, session) => sum + (session.duration_minutes || 0), 0)
+      meditationMinutes: dayMeditation.reduce((sum: number, session: any) => sum + (session.duration_minutes || 0), 0)
     };
   });
 
