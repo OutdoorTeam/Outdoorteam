@@ -1,30 +1,17 @@
-// CRON job for cleaning up old system logs
-// This file would be called by a scheduler or external cron service
+import 'dotenv/config';
 import { SystemLogger } from '../utils/logging.js';
 
-async function cleanupSystemLogs() {
+// Script simple de limpieza de logs viejos en database_alerts
+(async () => {
   try {
-    console.log('Starting system logs cleanup...');
-    
-    // Clean up logs older than 90 days
-    await SystemLogger.cleanupOldLogs(90);
-    
-    await SystemLogger.log('info', 'System logs cleanup completed', {
-      metadata: { retention_days: 90 }
-    });
-    
-    console.log('System logs cleanup completed successfully');
-  } catch (error) {
-    console.error('Failed to cleanup system logs:', error);
-    await SystemLogger.logCriticalError('System logs cleanup failed', error as Error);
+    const arg = process.argv[2];
+    const days = Number.isFinite(Number(arg)) ? Number(arg) : 30;
+
+    const deleted = await SystemLogger.purgeOldLogs(days);
+    console.log(`🧹 Cleanup done (older than ${days} days). Deleted ${deleted} rows.`);
+    process.exit(0);
+  } catch (err) {
+    console.error('Cleanup error:', err);
+    process.exit(1);
   }
-}
-
-// Run cleanup if this file is executed directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-  cleanupSystemLogs()
-    .then(() => process.exit(0))
-    .catch(() => process.exit(1));
-}
-
-export { cleanupSystemLogs };
+})();

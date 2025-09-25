@@ -1,5 +1,5 @@
-
-import express from 'express';
+﻿import express from 'express';
+import type { Request, Response } from 'express';
 import dotenv from 'dotenv';
 import multer from 'multer';
 import path from 'path';
@@ -24,22 +24,11 @@ import apiRoutes from './routes/api-routes.js';
 import authRoutes from './routes/auth-routes.js';
 import avatarRoutes from './routes/avatar-routes.js';
 import { authenticateToken, requireAdmin } from './middleware/auth.js';
-import {
-  ERROR_CODES,
-  sendErrorResponse
-} from './utils/validation.js';
+import { ERROR_CODES, sendErrorResponse } from './utils/validation.js';
 import { SystemLogger } from './utils/logging.js';
-import {
-  globalApiLimit,
-  burstLimit,
-} from './middleware/rate-limiter.js';
-import {
-  corsMiddleware,
-  corsErrorHandler,
-  securityHeaders,
-  logCorsConfig
-} from './config/cors.js';
-import { supabaseAdmin } from './supabase.js';
+import { globalApiLimit, burstLimit } from './middleware/rate-limiter.js';
+import { corsMiddleware, corsErrorHandler, securityHeaders, logCorsConfig } from './config/cors.js';
+import { supabaseAdmin } from './supabase.js'; // (se usa indirectamente en auth)
 
 dotenv.config();
 
@@ -47,17 +36,12 @@ const app = express();
 
 // --- Environment Variable Checks ---
 const isStrictEnv = process.env.STRICT_ENV === 'true';
-const requiredEnv = [
-  'DATABASE_URL',
-  'SUPABASE_URL',
-  'SUPABASE_SERVICE_ROLE',
-  'SUPABASE_JWT_SECRET',
-];
-const missingEnv = requiredEnv.filter(e => !process.env[e]);
+const requiredEnv = ['DATABASE_URL', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE', 'SUPABASE_JWT_SECRET'];
+const missingEnv = requiredEnv.filter((e) => !process.env[e]);
 const areCoreServicesAvailable = missingEnv.length === 0;
 
 if (isStrictEnv && !areCoreServicesAvailable) {
-  console.error('❌ STRICT_ENV is true and required environment variables are missing:', missingEnv.join(', '));
+  console.error('⚠️ STRICT_ENV is true and required environment variables are missing:', missingEnv.join(', '));
   console.error('Please check your .env file. The server will not start.');
   process.exit(1);
 }
@@ -73,12 +57,13 @@ const checkVapidConfiguration = () => {
   const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
   const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
 
-  const isConfigured = !!(VAPID_PUBLIC_KEY && 
-                         VAPID_PRIVATE_KEY && 
-                         VAPID_PRIVATE_KEY !== 'YOUR_PRIVATE_KEY_HERE' && 
-                         VAPID_PUBLIC_KEY !== 'YOUR_PUBLIC_KEY_HERE' &&
-                         VAPID_PRIVATE_KEY.length >= 32 &&
-                         VAPID_PUBLIC_KEY.length >= 32);
+  const isConfigured =
+    !!(VAPID_PUBLIC_KEY &&
+      VAPID_PRIVATE_KEY &&
+      VAPID_PRIVATE_KEY !== 'YOUR_PRIVATE_KEY_HERE' &&
+      VAPID_PUBLIC_KEY !== 'YOUR_PUBLIC_KEY_HERE' &&
+      VAPID_PRIVATE_KEY.length >= 32 &&
+      VAPID_PUBLIC_KEY.length >= 32);
 
   if (isConfigured) {
     console.log('✅ VAPID keys are configured correctly');
@@ -112,32 +97,21 @@ if (areCoreServicesAvailable) {
 }
 
 // Health check endpoint (always available)
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
+app.get('/health', (_req, res) => {
+  res.json({
+    status: 'ok',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
   });
 });
 
 // Debug endpoint for environment variables (always available)
-app.get('/debug/env', (req, res) => {
+app.get('/debug/env', (_req, res) => {
   const envStatus = requiredEnv.reduce((acc, key) => {
     acc[key] = process.env[key] ? 'SET' : 'NOT SET';
     return acc;
   }, {} as Record<string, string>);
-
-  res.json({
-    message: 'Environment Variable Status',
-    status: envStatus,
-    coreServices: areCoreServicesAvailable ? 'Available' : 'Unavailable',
-    strictMode: isStrictEnv,
-    featureFlags: {
-      migrations: process.env.FEATURE_MIGRATIONS === 'true',
-      seedDb: process.env.FEATURE_SEED_DB === 'true',
-      schedulers: process.env.ENABLE_SCHEDULERS === 'true',
-    },
-  });
+  res.json({ envStatus, isStrictEnv });
 });
 
 // --- Conditional Route and Middleware Mounting ---
@@ -147,13 +121,13 @@ if (areCoreServicesAvailable) {
     try {
       const { level, limit = 100 } = req.query;
       let query = db!
-        .selectFrom('system_logs')
-        .selectAll()
+        .selectFrom('database_alerts')
+        .select(['id', 'severity', 'message', 'details', 'created_at'])
         .orderBy('created_at', 'desc')
         .limit(parseInt(String(limit)));
 
       if (level) {
-        query = query.where('level', '=', String(level));
+        query = query.where('severity', '=', String(level));
       }
       const logs = await query.execute();
       res.json(logs);
@@ -166,13 +140,26 @@ if (areCoreServicesAvailable) {
   });
 
   // Simple root endpoint
-  app.get('/api/status', (req, res) => {
-    res.json({ 
-      message: 'Outdoor Team API Server', 
-      status: 'running',
-      environment: process.env.NODE_ENV || 'development',
-      timestamp: new Date().toISOString(),
-    });
+  app.get('/api/status', async (_req, res) => {
+    try {
+      const latestAlerts = await db!
+        .selectFrom('database_alerts')
+        .select(['id', 'severity as level', 'message', 'created_at'])
+        .orderBy('created_at', 'desc')
+        .limit(20)
+        .execute();
+
+      res.json({
+        message: 'Outdoor Team API Server',
+        status: 'running',
+        environment: process.env.NODE_ENV || 'development',
+        timestamp: new Date().toISOString(),
+        alerts: latestAlerts,
+      });
+    } catch (error) {
+      console.error('Error fetching latest alerts for status endpoint:', error);
+      sendErrorResponse(res, ERROR_CODES.SERVER_ERROR, 'Error fetching status data');
+    }
   });
 
   const getUserFeatures = (featuresJson: string) => {
@@ -199,8 +186,8 @@ if (areCoreServicesAvailable) {
         training: features.training || false,
         nutrition: features.nutrition || false,
         meditation: features.meditation || false,
-        active_breaks: features.active_breaks || false
-      }
+        active_breaks: features.active_breaks || false,
+      },
     };
   };
 
@@ -209,8 +196,8 @@ if (areCoreServicesAvailable) {
   app.use('/api', userStatsRoutes);
   app.use('/api/notifications', notificationRoutes);
   app.use('/api', nutritionPlanRoutes);
-  app.use('/api', trainingPlanRoutes);
-  app.use('/api', trainingScheduleRoutes);
+  app.use('/api/training', trainingPlanRoutes);
+  app.use('/api/training-schedule', trainingScheduleRoutes);
   app.use('/api/admin', userManagementRoutes);
   app.use('/api/admin', userGoalsRoutes);
   app.use('/api/admin', plansManagementRoutes);
@@ -221,50 +208,9 @@ if (areCoreServicesAvailable) {
   app.use('/api/auth', authRoutes);
   app.use('/api', avatarRoutes);
 
-  // File upload endpoint using Supabase Storage
-  app.post('/api/upload-user-file', authenticateToken, upload.single('file'), async (req: any, res) => {
-    if (!supabaseAdmin) {
-      return sendErrorResponse(res, ERROR_CODES.SERVER_ERROR, 'Storage service is not configured.');
-    }
-    if (!req.file) {
-      return sendErrorResponse(res, ERROR_CODES.VALIDATION_ERROR, 'No file uploaded.');
-    }
-
-    const { user_id, file_type } = req.body;
-    const file = req.file;
-    const timestamp = Date.now();
-    const extension = path.extname(file.originalname);
-    const baseName = path.basename(file.originalname, extension);
-    const fileName = `user_${user_id}/${file_type}_${timestamp}_${baseName}${extension}`;
-
-    try {
-      const { data, error } = await supabaseAdmin.storage
-        .from('user-files') // bucket name
-        .upload(fileName, file.buffer, {
-          contentType: file.mimetype,
-          upsert: false,
-        });
-
-      if (error) {
-        throw error;
-      }
-
-      // Save file metadata to our database
-      const newFile = await db!.insertInto('user_files').values({
-        user_id: user_id, // user_id is now a string (UUID)
-        filename: fileName,
-        file_type,
-        file_path: data.path,
-        uploaded_by: req.user.id, // req.user.id is also a string (UUID)
-        created_at: new Date(),
-      }).returningAll().executeTakeFirst();
-
-      res.status(201).json(newFile);
-    } catch (error) {
-      console.error('Error uploading to Supabase Storage:', error);
-      await SystemLogger.logCriticalError('Supabase upload error', error as Error, { userId: req.user.id });
-      sendErrorResponse(res, ERROR_CODES.SERVER_ERROR, 'Failed to upload file.');
-    }
+  // Endpoint de subida de archivos deshabilitado en este esquema
+  app.post('/api/user-files/upload', (_req: Request, res: Response): void => {
+    res.status(501).json({ message: 'User files storage not implemented for current schema' });
   });
 
   app.get('/api/auth/me', authenticateToken, (req: any, res: express.Response) => {
@@ -275,7 +221,7 @@ if (areCoreServicesAvailable) {
   });
 } else {
   console.warn('⚠️ Core services are unavailable due to missing environment variables. API endpoints are disabled.');
-  app.use('/api', (req, res) => {
+  app.use('/api', (_req, res) => {
     sendErrorResponse(res, ERROR_CODES.SERVER_ERROR, 'Server is not configured. Please check environment variables.');
   });
 }
@@ -283,16 +229,16 @@ if (areCoreServicesAvailable) {
 // Setup static serving for production
 if (process.env.NODE_ENV === 'production') {
   setupStaticServing(app);
-  console.log('📁 Static file serving configured for production');
+  console.log('🚀 Static file serving configured for production');
 }
 
 // 404 Handler
-app.use((req, res, next) => {
+app.use((req, res, _next) => {
   if (req.path.startsWith('/api/')) {
     sendErrorResponse(res, ERROR_CODES.NOT_FOUND_ERROR, 'API endpoint not found');
     return;
   }
-  
+
   if (process.env.NODE_ENV === 'production') {
     const indexPath = path.join(process.cwd(), 'dist/public', 'index.html');
     if (fs.existsSync(indexPath)) {
@@ -302,12 +248,12 @@ app.use((req, res, next) => {
     }
     return;
   }
-  
+
   res.status(404).json({ error: 'Route not found' });
 });
 
 // Global error handler
-app.use((error: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((error: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('Unhandled error:', error);
   if (res.headersSent) {
     return next(error);
@@ -317,9 +263,9 @@ app.use((error: any, req: express.Request, res: express.Response, next: express.
 
 export const startServer = async (port = 3001) => {
   try {
-    console.log('🔄 Starting server initialization...');
+    console.log('🛠️ Starting server initialization...');
     console.log('🌍 Environment:', process.env.NODE_ENV || 'development');
-    console.log('📁 Current working directory:', process.cwd());
+    console.log('📂 Current working directory:', process.cwd());
 
     if (areCoreServicesAvailable) {
       console.log('🔌 Testing database connection...');
@@ -327,11 +273,11 @@ export const startServer = async (port = 3001) => {
       console.log('✅ Database connection established');
 
       if (process.env.ENABLE_SCHEDULERS === 'true') {
-        console.log('🔄 Initializing daily reset scheduler...');
+        console.log('⏰ Initializing daily reset scheduler...');
         resetScheduler = new DailyResetScheduler(db);
         await resetScheduler.initialize();
       } else {
-        console.log('🚫 Schedulers are disabled (ENABLE_SCHEDULERS is not true).');
+        console.log('🛑 Schedulers are disabled (ENABLE_SCHEDULERS is not true).');
       }
 
       const vapidConfigured = checkVapidConfiguration();
@@ -344,31 +290,31 @@ export const startServer = async (port = 3001) => {
     const server = app.listen(port, '0.0.0.0', () => {
       console.log(`🚀 Server running on port ${port}`);
       logCorsConfig();
-      
+
       if (notificationScheduler?.isVapidConfigured()) {
-        console.log('📱 Push notifications: Ready');
+        console.log('🔔 Push notifications: Ready');
       } else {
-        console.log('📱 Push notifications: Disabled (VAPID keys not configured)');
+        console.log('🔕 Push notifications: Disabled (VAPID keys not configured)');
       }
 
       console.log('✅ Server startup completed successfully');
     });
 
     const gracefulShutdown = async (signal: string) => {
-      console.log(`\n🛑 ${signal} received. Starting graceful shutdown...`);
-      
+      console.log(`\n⚠️ ${signal} received. Starting graceful shutdown...`);
+
       server.close(async () => {
-        console.log('🔌 HTTP server closed');
+        console.log('🛑 HTTP server closed');
         if (resetScheduler) resetScheduler.stop();
         if (db) {
           try {
             await db.destroy();
-            console.log('🗄️  Database connection closed');
+            console.log('✅ Database connection closed');
           } catch (e) {
             console.error('Error closing database connection:', e);
           }
         }
-        console.log('✅ Graceful shutdown complete');
+        console.log('👋 Graceful shutdown complete');
         process.exit(0);
       });
     };
@@ -378,12 +324,16 @@ export const startServer = async (port = 3001) => {
 
     return server;
   } catch (error) {
-    console.error('❌ Failed to start server:', error);
+    console.error('🚨 Failed to start server:', error);
     process.exit(1);
   }
 };
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// ▶️ Guard de ejecución (CommonJS)
+declare const require: NodeRequire; // para TS
+declare const module: NodeModule;
+
+if (typeof require !== 'undefined' && require.main === module) {
   const port = parseInt(process.env.PORT || '3001', 10);
   startServer(port);
 }

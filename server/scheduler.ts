@@ -1,5 +1,5 @@
 import { db } from './database.js';
-import cron from 'node-cron';
+import cron, { ScheduledTask } from 'node-cron';
 
 interface DailyResetStats {
   usersProcessed: number;
@@ -10,7 +10,7 @@ interface DailyResetStats {
 
 class DailyResetScheduler {
   private isRunning = false;
-  private cronJob: cron.ScheduledTask | null = null;
+  private cronJob: ScheduledTask | null = null;
   private database: any;
 
   constructor(database: any) {
@@ -24,13 +24,14 @@ class DailyResetScheduler {
   }
 
   private initializeScheduler() {
-    // Schedule for 00:05 AM Argentina time (GMT-3)
-    // Using timezone 'America/Argentina/Buenos_Aires'
-    this.cronJob = cron.schedule('5 0 * * *', async () => {
-      await this.executeDailyReset();
-    }, {
-      timezone: 'America/Argentina/Buenos_Aires'
-    });
+    // 00:05 AM (Argentina) — America/Argentina/Buenos_Aires
+    this.cronJob = cron.schedule(
+      '5 0 * * *',
+      async () => {
+        await this.executeDailyReset();
+      },
+      { timezone: 'America/Argentina/Buenos_Aires' }
+    );
 
     console.log('Daily reset scheduler initialized for 00:05 AM Argentina time');
   }
@@ -39,10 +40,9 @@ class DailyResetScheduler {
     try {
       const today = this.getArgentinaDateString();
       const yesterday = this.getArgentinaDateString(-1);
-      
+
       console.log('Checking for missed reset. Today:', today, 'Yesterday:', yesterday);
 
-      // Check if yesterday's reset was executed
       const yesterdayReset = await this.database
         .selectFrom('daily_reset_log')
         .select(['reset_date', 'status'])
@@ -54,14 +54,13 @@ class DailyResetScheduler {
         await this.executeDailyReset(yesterday);
       }
 
-      // Check if today's reset should have already happened
-      const currentHour = new Date().toLocaleString('en-US', { 
+      const currentHour = new Date().toLocaleString('en-US', {
         timeZone: 'America/Argentina/Buenos_Aires',
         hour12: false,
-        hour: '2-digit'
+        hour: '2-digit',
       });
-      
-      if (parseInt(currentHour) >= 1) { // After 01:00 AM
+
+      if (parseInt(currentHour) >= 1) {
         const todayReset = await this.database
           .selectFrom('daily_reset_log')
           .select(['reset_date', 'status'])
@@ -69,7 +68,7 @@ class DailyResetScheduler {
           .executeTakeFirst();
 
         if (!todayReset) {
-          console.log('Today\'s reset missing, executing now...');
+          console.log("Today's reset missing, executing now...");
           await this.executeDailyReset(today);
         }
       }
@@ -86,7 +85,9 @@ class DailyResetScheduler {
 
   private getArgentinaDateString(daysOffset: number = 0): string {
     const now = new Date();
-    const argentinaTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Argentina/Buenos_Aires' }));
+    const argentinaTime = new Date(
+      now.toLocaleString('en-US', { timeZone: 'America/Argentina/Buenos_Aires' })
+    );
     argentinaTime.setDate(argentinaTime.getDate() + daysOffset);
     return argentinaTime.toISOString().split('T')[0];
   }
@@ -100,18 +101,17 @@ class DailyResetScheduler {
     this.isRunning = true;
     const startTime = Date.now();
     const resetDate = targetDate || this.getArgentinaDateString();
-    
+
     console.log(`Starting daily reset for date: ${resetDate}`);
 
     let stats: DailyResetStats = {
       usersProcessed: 0,
       totalDailyPoints: 0,
       totalSteps: 0,
-      totalNotes: 0
+      totalNotes: 0,
     };
 
     try {
-      // Check if reset already exists for this date
       const existingReset = await this.database
         .selectFrom('daily_reset_log')
         .select(['reset_date', 'status'])
@@ -123,14 +123,12 @@ class DailyResetScheduler {
         return;
       }
 
-      // Start transaction for atomic operation
       await this.database.transaction().execute(async (trx: any) => {
-        // Step 1: Archive current daily data to history
+        // 1) Archivar datos diarios
         const dailyData = await trx
           .selectFrom('daily_habits')
-          .leftJoin('user_notes', (join: any) => join
-            .onRef('daily_habits.user_id', '=', 'user_notes.user_id')
-            .on('user_notes.date', '=', resetDate)
+          .leftJoin('user_notes', (join: any) =>
+            join.onRef('daily_habits.user_id', '=', 'user_notes.user_id').on('user_notes.date', '=', resetDate)
           )
           .select([
             'daily_habits.user_id',
@@ -141,16 +139,14 @@ class DailyResetScheduler {
             'daily_habits.nutrition_completed',
             'daily_habits.movement_completed',
             'daily_habits.meditation_completed',
-            'user_notes.content as notes_content'
+            'user_notes.content as notes_content',
           ])
           .where('daily_habits.date', '=', resetDate)
           .execute();
 
         console.log(`Found ${dailyData.length} daily records to archive`);
 
-        // Archive each user's daily data
         for (const record of dailyData) {
-          // Insert into daily_history (with conflict resolution)
           await trx
             .insertInto('daily_history')
             .values({
@@ -163,28 +159,29 @@ class DailyResetScheduler {
               movement_completed: record.movement_completed || 0,
               meditation_completed: record.meditation_completed || 0,
               notes_content: record.notes_content || null,
-              archived_at: new Date().toISOString()
+              archived_at: new Date().toISOString(),
             })
-            .onConflict((oc: any) => oc.columns(['user_id', 'date']).doUpdateSet({
-              daily_points: record.daily_points || 0,
-              steps: record.steps || 0,
-              training_completed: record.training_completed || 0,
-              nutrition_completed: record.nutrition_completed || 0,
-              movement_completed: record.movement_completed || 0,
-              meditation_completed: record.meditation_completed || 0,
-              notes_content: record.notes_content || null,
-              archived_at: new Date().toISOString()
-            }))
+            .onConflict((oc: any) =>
+              oc.columns(['user_id', 'date']).doUpdateSet({
+                daily_points: record.daily_points || 0,
+                steps: record.steps || 0,
+                training_completed: record.training_completed || 0,
+                nutrition_completed: record.nutrition_completed || 0,
+                movement_completed: record.movement_completed || 0,
+                meditation_completed: record.meditation_completed || 0,
+                notes_content: record.notes_content || null,
+                archived_at: new Date().toISOString(),
+              })
+            )
             .execute();
 
-          // Accumulate stats
           stats.usersProcessed++;
           stats.totalDailyPoints += record.daily_points || 0;
           stats.totalSteps += record.steps || 0;
           if (record.notes_content) stats.totalNotes++;
         }
 
-        // Step 2: Reset daily_habits for the target date
+        // 2) Reset de daily_habits
         await trx
           .updateTable('daily_habits')
           .set({
@@ -194,21 +191,17 @@ class DailyResetScheduler {
             nutrition_completed: 0,
             movement_completed: 0,
             meditation_completed: 0,
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
           })
           .where('date', '=', resetDate)
           .execute();
 
-        // Step 3: Clear daily notes for the target date
-        await trx
-          .deleteFrom('user_notes')
-          .where('date', '=', resetDate)
-          .execute();
+        // 3) Borrar notas del día
+        await trx.deleteFrom('user_notes').where('date', '=', resetDate).execute();
 
         console.log(`Reset completed for ${stats.usersProcessed} users`);
       });
 
-      // Log successful completion
       const executionTime = Date.now() - startTime;
       await this.logResetExecution(resetDate, stats, 'completed', null, executionTime);
 
@@ -217,18 +210,14 @@ class DailyResetScheduler {
         totalPoints: stats.totalDailyPoints,
         totalSteps: stats.totalSteps,
         totalNotes: stats.totalNotes,
-        executionTime: `${executionTime}ms`
+        executionTime: `${executionTime}ms`,
       });
-
     } catch (error) {
       const executionTime = Date.now() - startTime;
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      
+
       console.error('Daily reset failed:', error);
-      
-      // Log failed execution
       await this.logResetExecution(resetDate, stats, 'failed', errorMessage, executionTime);
-      
       throw error;
     } finally {
       this.isRunning = false;
@@ -236,8 +225,8 @@ class DailyResetScheduler {
   }
 
   private async logResetExecution(
-    resetDate: string, 
-    stats: DailyResetStats, 
+    resetDate: string,
+    stats: DailyResetStats,
     status: 'completed' | 'failed' | 'partial',
     errorMessage: string | null,
     executionTime: number
@@ -254,25 +243,27 @@ class DailyResetScheduler {
           total_notes: stats.totalNotes,
           status,
           error_message: errorMessage,
-          execution_time_ms: executionTime
+          execution_time_ms: executionTime,
         })
-        .onConflict((oc: any) => oc.column('reset_date').doUpdateSet({
-          executed_at: new Date().toISOString(),
-          users_processed: stats.usersProcessed,
-          total_daily_points: stats.totalDailyPoints,
-          total_steps: stats.totalSteps,
-          total_notes: stats.totalNotes,
-          status,
-          error_message: errorMessage,
-          execution_time_ms: executionTime
-        }))
+        .onConflict((oc: any) =>
+          oc.column('reset_date').doUpdateSet({
+            executed_at: new Date().toISOString(),
+            users_processed: stats.usersProcessed,
+            total_daily_points: stats.totalDailyPoints,
+            total_steps: stats.totalSteps,
+            total_notes: stats.totalNotes,
+            status,
+            error_message: errorMessage,
+            execution_time_ms: executionTime,
+          })
+        )
         .execute();
     } catch (logError) {
       console.error('Failed to log reset execution:', logError);
     }
   }
 
-  public async getResetHistory(limit: number = 30): Promise<any[]> {
+  public async getResetHistory(limit = 30): Promise<any[]> {
     return await this.database
       .selectFrom('daily_reset_log')
       .selectAll()

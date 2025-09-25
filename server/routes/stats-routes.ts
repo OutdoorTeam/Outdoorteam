@@ -1,10 +1,36 @@
-import { Router } from 'express';
+﻿import { Router } from 'express';
 import { db } from '../database.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { sendErrorResponse, ERROR_CODES } from '../utils/validation.js';
 import { SystemLogger } from '../utils/logging.js';
 
 const router = Router();
+
+const toDateString = (value: string | Date) => {
+  if (value instanceof Date) {
+    return value.toISOString().split('T')[0];
+  }
+  return value.split('T')[0];
+};
+
+const mapHabitLogRow = (row: any) => {
+  const date = toDateString(row.day);
+  const exercise = Boolean(row.exercise);
+  const nutrition = Boolean(row.nutrition);
+  const movement = Boolean(row.movement);
+  const meditation = Boolean(row.meditation);
+  const daily_points = [exercise, nutrition, movement, meditation].reduce((sum, flag) => sum + (flag ? 1 : 0), 0);
+
+  return {
+    date,
+    daily_points,
+    steps: row.steps || 0,
+    training_completed: exercise ? 1 : 0,
+    nutrition_completed: nutrition ? 1 : 0,
+    movement_completed: movement ? 1 : 0,
+    meditation_completed: meditation ? 1 : 0,
+  };
+};
 
 // Get user statistics endpoint
 router.get('/users/:id/stats', authenticateToken, async (req: any, res) => {
@@ -26,7 +52,7 @@ router.get('/users/:id/stats', authenticateToken, async (req: any, res) => {
     const today = new Date();
     const weekStart = new Date(today);
     weekStart.setDate(today.getDate() - 6); // Last 7 days including today
-    
+
     const monthStart = new Date(today);
     monthStart.setDate(today.getDate() - 29); // Last 30 days including today
 
@@ -36,49 +62,31 @@ router.get('/users/:id/stats', authenticateToken, async (req: any, res) => {
     console.log('Date ranges - Week:', weekStartStr, 'Month:', monthStartStr);
 
     // Weekly data - last 7 days
-    const weeklyHabits = await db
-      .selectFrom('daily_habits')
-      .select(['date', 'daily_points', 'steps', 'training_completed', 'nutrition_completed', 'movement_completed', 'meditation_completed'])
+    const weeklyHabitLogs = await db
+      .selectFrom('habit_logs')
+      .select(['day', 'exercise', 'nutrition', 'movement', 'meditation', 'steps'])
       .where('user_id', '=', userId)
-      .where('date', '>=', weekStartStr)
-      .orderBy('date', 'asc')
+      .where('day', '>=', weekStart)
       .execute();
-
-    // Weekly meditation sessions
-    const weeklyMeditation = await db
-      .selectFrom('meditation_sessions')
-      .select(['completed_at', 'duration_minutes'])
-      .where('user_id', '=', userId)
-      .where('completed_at', '>=', weekStart)
-      .execute();
+    const weeklyHabits = weeklyHabitLogs.map(mapHabitLogRow);
 
     // Monthly data - last 30 days
-    const monthlyHabits = await db
-      .selectFrom('daily_habits')
-      .select(['date', 'daily_points', 'steps', 'training_completed', 'nutrition_completed', 'movement_completed', 'meditation_completed'])
+    const monthlyHabitLogs = await db
+      .selectFrom('habit_logs')
+      .select(['day', 'exercise', 'nutrition', 'movement', 'meditation', 'steps'])
       .where('user_id', '=', userId)
-      .where('date', '>=', monthStartStr)
+      .where('day', '>=', monthStart)
       .execute();
+    const monthlyHabits = monthlyHabitLogs.map(mapHabitLogRow);
 
-    // Monthly meditation sessions
-    const monthlyMeditation = await db
-      .selectFrom('meditation_sessions')
-      .select(['completed_at', 'duration_minutes'])
-      .where('user_id', '=', userId)
-      .where('completed_at', '>=', monthStart)
-      .execute();
-
-    // Process weekly data
-    const weeklyStats = processWeeklyStats(weeklyHabits, weeklyMeditation, weekStartStr);
-    
-    // Process monthly data
-    const monthlyStats = processMonthlyStats(monthlyHabits, monthlyMeditation);
+    const weeklyStats = processWeeklyStats(weeklyHabits, weekStartStr);
+    const monthlyStats = processMonthlyStats(monthlyHabits);
 
     console.log('Statistics processed - Weekly points:', weeklyStats.totalPoints, 'Monthly sessions:', monthlyStats.totalMeditationSessions);
 
     const stats = {
       weekly: weeklyStats,
-      monthly: monthlyStats
+      monthly: monthlyStats,
     };
 
     res.json(stats);
@@ -89,22 +97,17 @@ router.get('/users/:id/stats', authenticateToken, async (req: any, res) => {
   }
 });
 
-function processWeeklyStats(weeklyHabits: any[], weeklyMeditation: any[], weekStartStr: string) {
-  // Create array of last 7 days
+function processWeeklyStats(weeklyHabits: any[], weekStartStr: string) {
   const days = [];
   for (let i = 0; i < 7; i++) {
-    const date = new Date(weekStartStr);
-    date.setDate(date.getDate() + i);
-    days.push(date.toISOString().split('T')[0]);
+    const base = new Date(weekStartStr);
+    base.setDate(base.getDate() + i);
+    days.push(base.toISOString().split('T')[0]);
   }
 
-  // Create daily data structure
-  const dailyData = days.map(date => {
-    const dayData = weeklyHabits.find(h => h.date === date);
-    const dayMeditation = weeklyMeditation.filter((m: any) => {
-      const c = m.completed_at instanceof Date ? m.completed_at.toISOString() : m.completed_at;
-      return c.split('T')[0] === date;
-    });
+  const dailyData = days.map((date) => {
+    const dayData = weeklyHabits.find((h) => h.date === date);
+    const meditationCompleted = dayData?.meditation_completed || 0;
 
     return {
       date,
@@ -113,17 +116,16 @@ function processWeeklyStats(weeklyHabits: any[], weeklyMeditation: any[], weekSt
       training: dayData?.training_completed || 0,
       nutrition: dayData?.nutrition_completed || 0,
       movement: dayData?.movement_completed || 0,
-      meditation: dayData?.meditation_completed || 0,
-      meditationSessions: dayMeditation.length,
-      meditationMinutes: dayMeditation.reduce((sum: number, session: any) => sum + (session.duration_minutes || 0), 0)
+      meditation: meditationCompleted,
+      meditationSessions: meditationCompleted,
+      meditationMinutes: 0,
     };
   });
 
-  // Calculate totals
   const totalPoints = dailyData.reduce((sum, day) => sum + day.points, 0);
   const totalSteps = dailyData.reduce((sum, day) => sum + day.steps, 0);
   const totalMeditationSessions = dailyData.reduce((sum, day) => sum + day.meditationSessions, 0);
-  const totalMeditationMinutes = dailyData.reduce((sum, day) => sum + day.meditationMinutes, 0);
+  const totalMeditationMinutes = 0;
   const averageDailyPoints = totalPoints / 7;
 
   return {
@@ -132,39 +134,33 @@ function processWeeklyStats(weeklyHabits: any[], weeklyMeditation: any[], weekSt
     totalSteps,
     totalMeditationSessions,
     totalMeditationMinutes,
-    averageDailyPoints: Math.round(averageDailyPoints * 10) / 10
+    averageDailyPoints: Math.round(averageDailyPoints * 10) / 10,
   };
 }
 
-function processMonthlyStats(monthlyHabits: any[], monthlyMeditation: any[]) {
+function processMonthlyStats(monthlyHabits: any[]) {
   const totalDays = 30;
-  
-  // Count completions per habit
-  const trainingDays = monthlyHabits.filter(h => h.training_completed).length;
-  const nutritionDays = monthlyHabits.filter(h => h.nutrition_completed).length;
-  const movementDays = monthlyHabits.filter(h => h.movement_completed).length;
-  const meditationDays = monthlyHabits.filter(h => h.meditation_completed).length;
 
-  // Calculate percentages
+  const trainingDays = monthlyHabits.filter((h) => h.training_completed).length;
+  const nutritionDays = monthlyHabits.filter((h) => h.nutrition_completed).length;
+  const movementDays = monthlyHabits.filter((h) => h.movement_completed).length;
+  const meditationDays = monthlyHabits.filter((h) => h.meditation_completed).length;
+
   const habitCompletionRates = {
     training: Math.round((trainingDays / totalDays) * 100),
     nutrition: Math.round((nutritionDays / totalDays) * 100),
     movement: Math.round((movementDays / totalDays) * 100),
-    meditation: Math.round((meditationDays / totalDays) * 100)
+    meditation: Math.round((meditationDays / totalDays) * 100),
   };
 
-  // Calculate totals
   const totalPoints = monthlyHabits.reduce((sum, h) => sum + (h.daily_points || 0), 0);
   const totalSteps = monthlyHabits.reduce((sum, h) => sum + (h.steps || 0), 0);
-  const totalMeditationSessions = monthlyMeditation.length;
-  const totalMeditationMinutes = monthlyMeditation.reduce((sum, session) => sum + (session.duration_minutes || 0), 0);
 
-  // Habit completion data for chart
   const habitCompletionData = [
     { name: 'Entrenamiento', completed: trainingDays, total: totalDays, percentage: habitCompletionRates.training },
     { name: 'Nutrición', completed: nutritionDays, total: totalDays, percentage: habitCompletionRates.nutrition },
     { name: 'Movimiento', completed: movementDays, total: totalDays, percentage: habitCompletionRates.movement },
-    { name: 'Meditación', completed: meditationDays, total: totalDays, percentage: habitCompletionRates.meditation }
+    { name: 'Meditación', completed: meditationDays, total: totalDays, percentage: habitCompletionRates.meditation },
   ];
 
   return {
@@ -172,14 +168,14 @@ function processMonthlyStats(monthlyHabits: any[], monthlyMeditation: any[]) {
     habitCompletionRates,
     totalPoints,
     totalSteps,
-    totalMeditationSessions,
-    totalMeditationMinutes,
+    totalMeditationSessions: meditationDays,
+    totalMeditationMinutes: 0,
     completionCounts: {
       training: trainingDays,
       nutrition: nutritionDays,
       movement: movementDays,
-      meditation: meditationDays
-    }
+      meditation: meditationDays,
+    },
   };
 }
 

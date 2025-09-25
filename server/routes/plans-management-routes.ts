@@ -1,4 +1,4 @@
-import { Router } from 'express';
+﻿import { Router } from 'express';
 import { db } from '../database.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { sendErrorResponse, ERROR_CODES } from '../utils/validation.js';
@@ -6,23 +6,61 @@ import { SystemLogger } from '../utils/logging.js';
 
 const router = Router();
 
+const parsePrice = (value: unknown) => {
+  const numeric = typeof value === 'string' ? Number(value) : value;
+  if (typeof numeric !== 'number' || Number.isNaN(numeric) || numeric < 0) {
+    return null;
+  }
+  return numeric;
+};
+
+const normalizeFeatures = (rawFeatures: any, servicesIncluded: any): Record<string, unknown> => {
+  if (rawFeatures && typeof rawFeatures === 'object' && !Array.isArray(rawFeatures)) {
+    return rawFeatures;
+  }
+  if (Array.isArray(servicesIncluded)) {
+    return servicesIncluded.reduce((acc: Record<string, boolean>, item: any) => {
+      if (typeof item === 'string' && item.trim()) {
+        acc[item.trim()] = true;
+      }
+      return acc;
+    }, {});
+  }
+  return {};
+};
+
+const formatPlanResponse = (plan: any) => {
+  const features = (plan.features && typeof plan.features === 'object') ? plan.features : {};
+  const servicesIncluded = Array.isArray(plan.services_included)
+    ? plan.services_included
+    : Object.entries(features)
+        .filter(([, enabled]) => Boolean(enabled))
+        .map(([key]) => key);
+
+  return {
+    id: plan.id,
+    name: plan.name,
+    description: plan.description,
+    price: Number(plan.price),
+    features,
+    features_json: features,
+    services_included: servicesIncluded,
+    created_at: plan.created_at,
+  };
+};
+
 // Get all plans (admin only)
 router.get('/plans-management', authenticateToken, requireAdmin, async (req: any, res) => {
   try {
     console.log('Admin fetching all plans for management');
 
     const plans = await db
-      .selectFrom('plans')
-      .selectAll()
+      .selectFrom('subscription_plans')
+      .select(['id', 'name', 'price', 'description', 'features', 'created_at'])
       .orderBy('created_at', 'desc')
       .execute();
 
-    const formattedPlans = plans.map(plan => ({
-      ...plan,
-      services_included: JSON.parse(plan.services_included || '[]'),
-      features_json: JSON.parse(plan.features_json || '{}'),
-      is_active: Boolean(plan.is_active)
-    }));
+    const formattedPlans = plans.map(formatPlanResponse);
 
     console.log('Plans fetched for management:', formattedPlans.length);
     res.json(formattedPlans);
@@ -37,44 +75,33 @@ router.get('/plans-management', authenticateToken, requireAdmin, async (req: any
 router.put('/plans-management/:id', authenticateToken, requireAdmin, async (req: any, res) => {
   try {
     const { id } = req.params;
-    const { name, description, price, services_included, features_json, is_active } = req.body;
+    const { name, description, price, features, features_json, services_included } = req.body;
 
-    console.log('Admin updating plan:', id, 'with data:', { name, price, is_active });
+    console.log('Admin updating plan:', id, 'with data:', { name, price });
 
-    // Validate inputs
     if (!name?.trim()) {
       sendErrorResponse(res, ERROR_CODES.VALIDATION_ERROR, 'El nombre del plan es requerido');
       return;
     }
 
-    if (!description?.trim()) {
-      sendErrorResponse(res, ERROR_CODES.VALIDATION_ERROR, 'La descripción del plan es requerida');
-      return;
-    }
-
-    if (typeof price !== 'number' || price < 0) {
+    const normalizedPrice = parsePrice(price);
+    if (normalizedPrice === null) {
       sendErrorResponse(res, ERROR_CODES.VALIDATION_ERROR, 'El precio debe ser un número válido');
       return;
     }
 
-    if (!Array.isArray(services_included)) {
-      sendErrorResponse(res, ERROR_CODES.VALIDATION_ERROR, 'Los servicios incluidos deben ser un array');
-      return;
-    }
+    const planFeatures = normalizeFeatures(features ?? features_json, services_included);
 
     const updatedPlan = await db
-      .updateTable('plans')
+      .updateTable('subscription_plans')
       .set({
         name: name.trim(),
-        description: description.trim(),
-        price,
-        services_included: JSON.stringify(services_included),
-        features_json: JSON.stringify(features_json || {}),
-        is_active: is_active ? 1 : 0,
-        updated_at: new Date()
+        description: description?.trim() || null,
+        price: normalizedPrice,
+        features: planFeatures,
       })
       .where('id', '=', String(id))
-      .returning(['id', 'name', 'description', 'price', 'services_included', 'features_json', 'is_active'])
+      .returning(['id', 'name', 'price', 'description', 'features', 'created_at'])
       .executeTakeFirst();
 
     if (!updatedPlan) {
@@ -84,15 +111,10 @@ router.put('/plans-management/:id', authenticateToken, requireAdmin, async (req:
 
     await SystemLogger.log('info', 'Plan updated', {
       userId: req.user.id,
-      metadata: { plan_id: String(id), name, price }
+      metadata: { plan_id: String(id), name, price: normalizedPrice },
     });
 
-    const formattedPlan = {
-      ...updatedPlan,
-      services_included: JSON.parse(updatedPlan.services_included || '[]'),
-      features_json: JSON.parse(updatedPlan.features_json || '{}'),
-      is_active: Boolean(updatedPlan.is_active)
-    };
+    const formattedPlan = formatPlanResponse(updatedPlan);
 
     console.log('Plan updated successfully:', formattedPlan.id);
     res.json(formattedPlan);
@@ -106,50 +128,34 @@ router.put('/plans-management/:id', authenticateToken, requireAdmin, async (req:
 // Create new plan (admin only)
 router.post('/plans-management', authenticateToken, requireAdmin, async (req: any, res) => {
   try {
-    const { name, description, price, services_included, features_json } = req.body;
+    const { name, description, price, features, features_json, services_included } = req.body;
 
     console.log('Admin creating new plan:', { name, price });
 
-    // Validate inputs
     if (!name?.trim()) {
       sendErrorResponse(res, ERROR_CODES.VALIDATION_ERROR, 'El nombre del plan es requerido');
       return;
     }
 
-    if (!description?.trim()) {
-      sendErrorResponse(res, ERROR_CODES.VALIDATION_ERROR, 'La descripción del plan es requerida');
-      return;
-    }
-
-    if (typeof price !== 'number' || price < 0) {
+    const normalizedPrice = parsePrice(price);
+    if (normalizedPrice === null) {
       sendErrorResponse(res, ERROR_CODES.VALIDATION_ERROR, 'El precio debe ser un número válido');
       return;
     }
 
-    if (!Array.isArray(services_included) || services_included.length === 0) {
-      sendErrorResponse(res, ERROR_CODES.VALIDATION_ERROR, 'Debe incluir al menos un servicio');
-      return;
-    }
+    const planFeatures = normalizeFeatures(features ?? features_json, services_included);
 
+    const now = new Date();
     const newPlan = await db
-      .insertInto('plans')
+      .insertInto('subscription_plans')
       .values({
         name: name.trim(),
-        description: description.trim(),
-        price,
-        services_included: JSON.stringify(services_included),
-        features_json: JSON.stringify(features_json || {
-          habits: true,
-          training: true,
-          nutrition: false,
-          meditation: false,
-          active_breaks: true
-        }),
-        is_active: 1,
-        created_at: new Date(),
-        updated_at: new Date()
+        description: description?.trim() || null,
+        price: normalizedPrice,
+        features: planFeatures,
+        created_at: now,
       })
-      .returning(['id', 'name', 'description', 'price', 'services_included', 'features_json', 'is_active'])
+      .returning(['id', 'name', 'price', 'description', 'features', 'created_at'])
       .executeTakeFirst();
 
     if (!newPlan) {
@@ -159,15 +165,10 @@ router.post('/plans-management', authenticateToken, requireAdmin, async (req: an
 
     await SystemLogger.log('info', 'Plan created', {
       userId: req.user.id,
-      metadata: { plan_id: newPlan.id, name, price }
+      metadata: { plan_id: newPlan.id, name, price: normalizedPrice },
     });
 
-    const formattedPlan = {
-      ...newPlan,
-      services_included: JSON.parse(newPlan.services_included || '[]'),
-      features_json: JSON.parse(newPlan.features_json || '{}'),
-      is_active: Boolean(newPlan.is_active)
-    };
+    const formattedPlan = formatPlanResponse(newPlan);
 
     console.log('Plan created successfully:', formattedPlan.id);
     res.status(201).json(formattedPlan);
@@ -185,13 +186,10 @@ router.delete('/plans-management/:id', authenticateToken, requireAdmin, async (r
 
     console.log('Admin deleting plan:', id);
 
-    // Check if plan is in use by checking the 'plan_type' column on the 'users' table
     const usersOnPlan = await db
       .selectFrom('users')
       .select('id')
-      .where('plan_type', '=', (
-        db.selectFrom('plans').select('name').where('id', '=', String(id))
-      ))
+      .where('subscription_plan_id', '=', String(id))
       .limit(1)
       .execute();
 
@@ -200,8 +198,31 @@ router.delete('/plans-management/:id', authenticateToken, requireAdmin, async (r
       return;
     }
 
+    const planRecord = await db
+      .selectFrom('subscription_plans')
+      .select(['id', 'name'])
+      .where('id', '=', String(id))
+      .executeTakeFirst();
+
+    if (!planRecord) {
+      sendErrorResponse(res, ERROR_CODES.NOT_FOUND_ERROR, 'Plan no encontrado');
+      return;
+    }
+
+    const entitlements = await db
+      .selectFrom('entitlements')
+      .select('user_id')
+      .where('plan', '=', planRecord.name)
+      .limit(1)
+      .execute();
+
+    if (entitlements.length > 0) {
+      sendErrorResponse(res, ERROR_CODES.VALIDATION_ERROR, 'Plan asignado en entitlements, desvincular antes de eliminar');
+      return;
+    }
+
     const deletedPlan = await db
-      .deleteFrom('plans')
+      .deleteFrom('subscription_plans')
       .where('id', '=', String(id))
       .returning(['id', 'name'])
       .executeTakeFirst();
@@ -213,7 +234,7 @@ router.delete('/plans-management/:id', authenticateToken, requireAdmin, async (r
 
     await SystemLogger.log('info', 'Plan deleted', {
       userId: req.user.id,
-      metadata: { plan_id: deletedPlan.id, name: deletedPlan.name }
+      metadata: { plan_id: deletedPlan.id, name: deletedPlan.name },
     });
 
     console.log('Plan deleted successfully:', deletedPlan.id);

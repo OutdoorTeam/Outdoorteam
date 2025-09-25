@@ -1,136 +1,67 @@
-import { Router } from 'express';
+﻿import { Router } from 'express';
+import type { Request, Response } from 'express';
 import { db } from '../database.js';
-import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import { authenticateToken } from '../middleware/auth.js';
 import { sendErrorResponse, ERROR_CODES } from '../utils/validation.js';
-import { SystemLogger } from '../utils/logging.js';
 
 const router = Router();
 
-// Get user goals (admin only)
-router.get('/users/:userId/goals', authenticateToken, requireAdmin, async (req: any, res) => {
+// GET goals by user
+router.get('/user-goals/:userId', authenticateToken, async (req: Request, res: Response): Promise<void> => {
   try {
-    const { userId } = req.params;
-
-    console.log('Admin fetching goals for user:', userId);
-
-    let goals = await db
-      .selectFrom('user_goals')
-      .selectAll()
-      .where('user_id', '=', String(userId))
+    const userId = String(req.params.userId);
+    const existing = await db
+      .selectFrom('goals')
+      .select(['user_id', 'week_points_goal', 'daily_steps_goal'])
+      .where('user_id', '=', userId)
       .executeTakeFirst();
 
-    if (!goals) {
-      // Create default goals if none exist
-      goals = await db
-        .insertInto('user_goals')
-        .values({
-          user_id: String(userId),
-          daily_steps_goal: 8000,
-          weekly_points_goal: 28,
-          created_at: new Date(),
-          updated_at: new Date()
-        })
-        .returning(['id', 'user_id', 'daily_steps_goal', 'weekly_points_goal', 'created_at', 'updated_at'])
-        .executeTakeFirst();
+    if (!existing) {
+      res.json({ user_id: userId, week_points_goal: 18, daily_steps_goal: 6500 });
+      return;
     }
-
-    res.json(goals);
-  } catch (error) {
-    console.error('Error fetching user goals:', error);
-    await SystemLogger.logCriticalError('Admin user goals fetch error', error as Error, { userId: req.user?.id });
-    sendErrorResponse(res, ERROR_CODES.SERVER_ERROR, 'Error al obtener metas del usuario');
+    res.json(existing);
+  } catch {
+    sendErrorResponse(res, ERROR_CODES.SERVER_ERROR, 'Error fetching goals');
   }
 });
 
-// Update user goals (admin only)
-router.put('/users/:userId/goals', authenticateToken, requireAdmin, async (req: any, res) => {
+// UPSERT goals
+router.put('/user-goals/:userId', authenticateToken, async (req: Request, res: Response): Promise<void> => {
   try {
-    const { userId } = req.params;
-    const { daily_steps_goal, weekly_points_goal } = req.body;
+    const userId = String(req.params.userId);
+    const { daily_steps_goal, week_points_goal } = req.body as { daily_steps_goal?: number; week_points_goal?: number };
 
-    console.log('Admin updating goals for user:', userId, 'goals:', req.body);
-
-    // Validate inputs
-    if (daily_steps_goal !== undefined && (daily_steps_goal < 1000 || daily_steps_goal > 50000)) {
-      sendErrorResponse(res, ERROR_CODES.VALIDATION_ERROR, 'Meta de pasos debe estar entre 1,000 y 50,000');
-      return;
-    }
-
-    if (weekly_points_goal !== undefined && (weekly_points_goal < 7 || weekly_points_goal > 100)) {
-      sendErrorResponse(res, ERROR_CODES.VALIDATION_ERROR, 'Meta semanal debe estar entre 7 y 100 puntos');
-      return;
-    }
-
-    // Check if user exists
-    const user = await db
-      .selectFrom('users')
-      .select(['id', 'email'])
-      .where('id', '=', String(userId))
+    const existing = await db
+      .selectFrom('goals')
+      .select(['user_id', 'week_points_goal', 'daily_steps_goal'])
+      .where('user_id', '=', userId)
       .executeTakeFirst();
 
-    if (!user) {
-      sendErrorResponse(res, ERROR_CODES.NOT_FOUND_ERROR, 'Usuario no encontrado');
+    const nextDaily = daily_steps_goal ?? existing?.daily_steps_goal ?? 6500;
+    const nextWeekly = week_points_goal ?? existing?.week_points_goal ?? 18;
+
+    if (existing) {
+      const updated = await db
+        .updateTable('goals')
+        .set({ daily_steps_goal: nextDaily, week_points_goal: nextWeekly, updated_at: new Date() })
+        .where('user_id', '=', userId)
+        .returning(['user_id', 'week_points_goal', 'daily_steps_goal'])
+        .executeTakeFirst();
+
+      res.json(updated);
       return;
     }
 
-    const updateData: any = {
-      updated_at: new Date()
-    };
-
-    if (daily_steps_goal !== undefined) {
-      updateData.daily_steps_goal = daily_steps_goal;
-    }
-
-    if (weekly_points_goal !== undefined) {
-      updateData.weekly_points_goal = weekly_points_goal;
-    }
-
-    // Check if goals exist
-    const existingGoals = await db
-      .selectFrom('user_goals')
-      .select(['id'])
-      .where('user_id', '=', String(userId))
+    const inserted = await db
+      .insertInto('goals')
+      .values({ user_id: userId, daily_steps_goal: nextDaily, week_points_goal: nextWeekly, updated_at: new Date() })
+      .returning(['user_id', 'week_points_goal', 'daily_steps_goal'])
       .executeTakeFirst();
 
-    let result;
-    if (existingGoals) {
-      // Update existing goals
-      result = await db
-        .updateTable('user_goals')
-        .set(updateData)
-        .where('user_id', '=', String(userId))
-        .returning(['id', 'user_id', 'daily_steps_goal', 'weekly_points_goal', 'created_at', 'updated_at'])
-        .executeTakeFirst();
-    } else {
-      // Create new goals
-      result = await db
-        .insertInto('user_goals')
-        .values({
-          user_id: String(userId),
-          daily_steps_goal: daily_steps_goal || 8000,
-          weekly_points_goal: weekly_points_goal || 28,
-          created_at: new Date(),
-          updated_at: new Date()
-        })
-        .returning(['id', 'user_id', 'daily_steps_goal', 'weekly_points_goal', 'created_at', 'updated_at'])
-        .executeTakeFirst();
-    }
-
-    console.log('User goals updated successfully:', result);
-    await SystemLogger.log('info', 'User goals updated by admin', {
-      userId: req.user.id,
-      metadata: { 
-        target_user_id: String(userId),
-        daily_steps_goal: result?.daily_steps_goal,
-        weekly_points_goal: result?.weekly_points_goal
-      }
-    });
-
-    res.json(result);
-  } catch (error) {
-    console.error('Error updating user goals:', error);
-    await SystemLogger.logCriticalError('Admin user goals update error', error as Error, { userId: req.user?.id });
-    sendErrorResponse(res, ERROR_CODES.SERVER_ERROR, 'Error al actualizar metas del usuario');
+    res.json(inserted);
+  } catch {
+    sendErrorResponse(res, ERROR_CODES.SERVER_ERROR, 'Error saving goals');
   }
 });
 

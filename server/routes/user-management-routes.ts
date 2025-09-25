@@ -1,10 +1,28 @@
-import express from 'express';
+﻿import express from 'express';
 import { db } from '../database.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { SystemLogger } from '../utils/logging.js';
 import { ERROR_CODES, sendErrorResponse } from '../utils/validation.js';
 
 const router = express.Router();
+
+const booleanOrDefault = (value: unknown, fallback: boolean) => {
+  if (value === undefined || value === null) return fallback;
+  return Boolean(value);
+};
+
+const defaultPermissions = {
+  has_training_access: false,
+  has_nutrition_access: false,
+  has_pause_access: false,
+  has_meditation_access: false,
+};
+
+const mapGoalResponse = (row: any, userId: string) => ({
+  user_id: userId,
+  week_points_goal: row?.week_points_goal ?? 18,
+  daily_steps_goal: row?.daily_steps_goal ?? 6500,
+});
 
 // Get user permissions
 router.get('/users/:id/permissions', authenticateToken, requireAdmin, async (req: any, res: express.Response) => {
@@ -14,35 +32,23 @@ router.get('/users/:id/permissions', authenticateToken, requireAdmin, async (req
 
     console.log('Admin fetching permissions for user:', userId);
 
-    const permissions = await db
-      .selectFrom('user_permissions')
-      .selectAll()
-      .where('user_id', '=', userId)
+    const userRecord = await db
+      .selectFrom('users')
+      .select(['has_training_access', 'has_nutrition_access', 'has_pause_access', 'has_meditation_access'])
+      .where('id', '=', userId)
       .executeTakeFirst();
 
-    if (!permissions) {
-      // Create default permissions if none exist
-      const defaultPermissions = await db
-        .insertInto('user_permissions')
-        .values({
-          user_id: userId,
-          dashboard_enabled: 1,
-          training_enabled: 1,
-          nutrition_enabled: 1,
-          meditation_enabled: 1,
-          active_breaks_enabled: 1,
-          exercises_enabled: 1,
-          created_at: new Date(),
-          updated_at: new Date()
-        })
-        .returning(['id', 'user_id', 'dashboard_enabled', 'training_enabled', 'nutrition_enabled', 'meditation_enabled', 'active_breaks_enabled', 'exercises_enabled'])
-        .executeTakeFirst();
-
-      res.json(defaultPermissions);
+    if (!userRecord) {
+      sendErrorResponse(res, ERROR_CODES.NOT_FOUND_ERROR, 'Usuario no encontrado');
       return;
     }
 
-    res.json(permissions);
+    res.json({
+      has_training_access: booleanOrDefault(userRecord.has_training_access, false),
+      has_nutrition_access: booleanOrDefault(userRecord.has_nutrition_access, false),
+      has_pause_access: booleanOrDefault(userRecord.has_pause_access, false),
+      has_meditation_access: booleanOrDefault(userRecord.has_meditation_access, false),
+    });
   } catch (error) {
     console.error('Error fetching user permissions:', error);
     await SystemLogger.logCriticalError('User permissions fetch error', error as Error, { userId: req.user?.id });
@@ -56,59 +62,58 @@ router.put('/users/:id/permissions', authenticateToken, requireAdmin, async (req
     const { id } = req.params;
     const userId = String(id);
     const {
-      dashboard_enabled,
-      training_enabled,
-      nutrition_enabled,
-      meditation_enabled,
-      active_breaks_enabled,
-      exercises_enabled
+      has_training_access,
+      has_nutrition_access,
+      has_pause_access,
+      has_meditation_access,
     } = req.body;
 
     console.log('Admin updating permissions for user:', userId, 'data:', req.body);
 
-    const updatedPermissions = await db
-      .updateTable('user_permissions')
-      .set({
-        dashboard_enabled: dashboard_enabled ? 1 : 0,
-        training_enabled: training_enabled ? 1 : 0,
-        nutrition_enabled: nutrition_enabled ? 1 : 0,
-        meditation_enabled: meditation_enabled ? 1 : 0,
-        active_breaks_enabled: active_breaks_enabled ? 1 : 0,
-        exercises_enabled: exercises_enabled ? 1 : 0,
-        updated_at: new Date()
-      })
-      .where('user_id', '=', userId)
-      .returning(['id', 'user_id', 'dashboard_enabled', 'training_enabled', 'nutrition_enabled', 'meditation_enabled', 'active_breaks_enabled', 'exercises_enabled'])
+    const userExists = await db
+      .selectFrom('users')
+      .select('id')
+      .where('id', '=', userId)
       .executeTakeFirst();
 
-    if (!updatedPermissions) {
-      // Create if doesn't exist
-      const newPermissions = await db
-        .insertInto('user_permissions')
-        .values({
-          user_id: userId,
-          dashboard_enabled: dashboard_enabled ? 1 : 0,
-          training_enabled: training_enabled ? 1 : 0,
-          nutrition_enabled: nutrition_enabled ? 1 : 0,
-          meditation_enabled: meditation_enabled ? 1 : 0,
-          active_breaks_enabled: active_breaks_enabled ? 1 : 0,
-          exercises_enabled: exercises_enabled ? 1 : 0,
-          created_at: new Date(),
-          updated_at: new Date()
-        })
-        .returning(['id', 'user_id', 'dashboard_enabled', 'training_enabled', 'nutrition_enabled', 'meditation_enabled', 'active_breaks_enabled', 'exercises_enabled'])
-        .executeTakeFirst();
-
-      res.json(newPermissions);
+    if (!userExists) {
+      sendErrorResponse(res, ERROR_CODES.NOT_FOUND_ERROR, 'Usuario no encontrado');
       return;
+    }
+
+    const updatePayload: Record<string, boolean> = {};
+    if (has_training_access !== undefined) updatePayload.has_training_access = Boolean(has_training_access);
+    if (has_nutrition_access !== undefined) updatePayload.has_nutrition_access = Boolean(has_nutrition_access);
+    if (has_pause_access !== undefined) updatePayload.has_pause_access = Boolean(has_pause_access);
+    if (has_meditation_access !== undefined) updatePayload.has_meditation_access = Boolean(has_meditation_access);
+
+    if (Object.keys(updatePayload).length === 0) {
+      sendErrorResponse(res, ERROR_CODES.VALIDATION_ERROR, 'No hay cambios para aplicar');
+      return;
+    }
+
+    const updatedUser = await db
+      .updateTable('users')
+      .set(updatePayload)
+      .where('id', '=', userId)
+      .returning(['has_training_access', 'has_nutrition_access', 'has_pause_access', 'has_meditation_access'])
+      .executeTakeFirst();
+
+    if (!updatedUser) {
+      throw new Error('Failed to update permissions');
     }
 
     await SystemLogger.log('info', 'User permissions updated', {
       userId: req.user.id,
-      metadata: { target_user_id: userId, permissions: req.body }
+      metadata: { target_user_id: userId, permissions: updatePayload },
     });
 
-    res.json(updatedPermissions);
+    res.json({
+      has_training_access: updatedUser.has_training_access,
+      has_nutrition_access: updatedUser.has_nutrition_access,
+      has_pause_access: updatedUser.has_pause_access,
+      has_meditation_access: updatedUser.has_meditation_access,
+    });
   } catch (error) {
     console.error('Error updating user permissions:', error);
     await SystemLogger.logCriticalError('User permissions update error', error as Error, { userId: req.user?.id });
@@ -116,7 +121,7 @@ router.put('/users/:id/permissions', authenticateToken, requireAdmin, async (req
   }
 });
 
-// Get user goals
+// Get user goals (admin)
 router.get('/users/:id/goals', authenticateToken, requireAdmin, async (req: any, res: express.Response) => {
   try {
     const { id } = req.params;
@@ -124,31 +129,13 @@ router.get('/users/:id/goals', authenticateToken, requireAdmin, async (req: any,
 
     console.log('Admin fetching goals for user:', userId);
 
-    const goals = await db
-      .selectFrom('user_goals')
-      .selectAll()
+    const goalRow = await db
+      .selectFrom('goals')
+      .select(['week_points_goal', 'daily_steps_goal'])
       .where('user_id', '=', userId)
       .executeTakeFirst();
 
-    if (!goals) {
-      // Create default goals if none exist
-      const defaultGoals = await db
-        .insertInto('user_goals')
-        .values({
-          user_id: userId,
-          daily_steps_goal: 8000,
-          weekly_points_goal: 28,
-          created_at: new Date(),
-          updated_at: new Date()
-        })
-        .returning(['id', 'user_id', 'daily_steps_goal', 'weekly_points_goal'])
-        .executeTakeFirst();
-
-      res.json(defaultGoals);
-      return;
-    }
-
-    res.json(goals);
+    res.json(mapGoalResponse(goalRow, userId));
   } catch (error) {
     console.error('Error fetching user goals:', error);
     await SystemLogger.logCriticalError('User goals fetch error', error as Error, { userId: req.user?.id });
@@ -156,133 +143,78 @@ router.get('/users/:id/goals', authenticateToken, requireAdmin, async (req: any,
   }
 });
 
-// Update user goals
+// Update user goals (admin)
 router.put('/users/:id/goals', authenticateToken, requireAdmin, async (req: any, res: express.Response) => {
   try {
     const { id } = req.params;
     const userId = String(id);
-    const { daily_steps_goal, weekly_points_goal } = req.body;
+    const { daily_steps_goal, week_points_goal } = req.body;
 
     console.log('Admin updating goals for user:', userId, 'data:', req.body);
 
-    // Validate input
-    if (daily_steps_goal && (daily_steps_goal < 1000 || daily_steps_goal > 50000)) {
+    if (daily_steps_goal !== undefined && (daily_steps_goal < 1000 || daily_steps_goal > 50000)) {
       sendErrorResponse(res, ERROR_CODES.VALIDATION_ERROR, 'La meta de pasos debe estar entre 1,000 y 50,000');
       return;
     }
 
-    if (weekly_points_goal && (weekly_points_goal < 7 || weekly_points_goal > 100)) {
+    if (week_points_goal !== undefined && (week_points_goal < 7 || week_points_goal > 100)) {
       sendErrorResponse(res, ERROR_CODES.VALIDATION_ERROR, 'La meta semanal debe estar entre 7 y 100 puntos');
       return;
     }
 
-    const updatedGoals = await db
-      .updateTable('user_goals')
-      .set({
-        daily_steps_goal: daily_steps_goal || 8000,
-        weekly_points_goal: weekly_points_goal || 28,
-        updated_at: new Date()
-      })
+    const now = new Date();
+    const existing = await db
+      .selectFrom('goals')
+      .select(['week_points_goal', 'daily_steps_goal'])
       .where('user_id', '=', userId)
-      .returning(['id', 'user_id', 'daily_steps_goal', 'weekly_points_goal'])
       .executeTakeFirst();
 
-    if (!updatedGoals) {
-      // Create if doesn't exist
-      const newGoals = await db
-        .insertInto('user_goals')
+    const nextDaily = daily_steps_goal !== undefined ? daily_steps_goal : existing?.daily_steps_goal ?? 6500;
+    const nextWeekly = week_points_goal !== undefined ? week_points_goal : existing?.week_points_goal ?? 18;
+
+    let result;
+    if (existing) {
+      result = await db
+        .updateTable('goals')
+        .set({
+          daily_steps_goal: nextDaily,
+          week_points_goal: nextWeekly,
+          updated_at: now,
+        })
+        .where('user_id', '=', userId)
+        .returning(['week_points_goal', 'daily_steps_goal'])
+        .executeTakeFirst();
+    } else {
+      result = await db
+        .insertInto('goals')
         .values({
           user_id: userId,
-          daily_steps_goal: daily_steps_goal || 8000,
-          weekly_points_goal: weekly_points_goal || 28,
-          created_at: new Date(),
-          updated_at: new Date()
+          daily_steps_goal: nextDaily,
+          week_points_goal: nextWeekly,
+          updated_at: now,
         })
-        .returning(['id', 'user_id', 'daily_steps_goal', 'weekly_points_goal'])
+        .returning(['week_points_goal', 'daily_steps_goal'])
         .executeTakeFirst();
+    }
 
-      res.json(newGoals);
-      return;
+    if (!result) {
+      throw new Error('Failed to persist goals');
     }
 
     await SystemLogger.log('info', 'User goals updated', {
       userId: req.user.id,
-      metadata: { target_user_id: userId, goals: req.body }
+      metadata: { target_user_id: userId, goals: { daily_steps_goal: nextDaily, week_points_goal: nextWeekly } },
     });
 
-    res.json(updatedGoals);
+    res.json({
+      user_id: userId,
+      week_points_goal: result.week_points_goal,
+      daily_steps_goal: result.daily_steps_goal,
+    });
   } catch (error) {
     console.error('Error updating user goals:', error);
     await SystemLogger.logCriticalError('User goals update error', error as Error, { userId: req.user?.id });
     sendErrorResponse(res, ERROR_CODES.SERVER_ERROR, 'Error al actualizar metas del usuario');
-  }
-});
-
-// Get user's today habits (admin view)
-router.get('/users/:id/today-habits', authenticateToken, requireAdmin, async (req: any, res: express.Response) => {
-  try {
-    const { id } = req.params;
-    const userId = String(id);
-    const today = new Date().toISOString().split('T')[0];
-
-    console.log('Admin fetching today habits for user:', userId, 'date:', today);
-
-    const todayHabits = await db
-      .selectFrom('daily_habits')
-      .selectAll()
-      .where('user_id', '=', userId)
-      .where('date', '=', today)
-      .executeTakeFirst();
-
-    if (todayHabits) {
-      res.json(todayHabits);
-    } else {
-      // Return default values if no record exists
-      res.json({
-        user_id: userId,
-        date: today,
-        training_completed: 0,
-        nutrition_completed: 0,
-        movement_completed: 0,
-        meditation_completed: 0,
-        daily_points: 0,
-        steps: 0
-      });
-    }
-  } catch (error) {
-    console.error('Error fetching user today habits:', error);
-    await SystemLogger.logCriticalError('User today habits fetch error', error as Error, { userId: req.user?.id });
-    sendErrorResponse(res, ERROR_CODES.SERVER_ERROR, 'Error al obtener hábitos del usuario');
-  }
-});
-
-// Get user's step history
-router.get('/users/:id/step-history', authenticateToken, requireAdmin, async (req: any, res: express.Response) => {
-  try {
-    const { id } = req.params;
-    const userId = String(id);
-    const { days = 30 } = req.query;
-    
-    const daysBack = parseInt(days as string);
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - daysBack);
-    const startDateStr = startDate.toISOString().split('T')[0];
-
-    console.log('Admin fetching step history for user:', userId, 'from:', startDateStr);
-
-    const stepHistory = await db
-      .selectFrom('daily_habits')
-      .select(['date', 'steps', 'movement_completed', 'daily_points'])
-      .where('user_id', '=', userId)
-      .where('date', '>=', startDateStr)
-      .orderBy('date', 'desc')
-      .execute();
-
-    res.json(stepHistory);
-  } catch (error) {
-    console.error('Error fetching user step history:', error);
-    await SystemLogger.logCriticalError('User step history fetch error', error as Error, { userId: req.user?.id });
-    sendErrorResponse(res, ERROR_CODES.SERVER_ERROR, 'Error al obtener historial de pasos del usuario');
   }
 });
 

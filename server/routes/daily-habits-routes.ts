@@ -1,4 +1,4 @@
-import { Router } from 'express';
+﻿import { Router } from 'express';
 import { db } from '../database.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { sendErrorResponse, ERROR_CODES } from '../utils/validation.js';
@@ -6,47 +6,148 @@ import { SystemLogger } from '../utils/logging.js';
 
 const router = Router();
 
-// Get today's habits for the authenticated user
+const isoDate = (value: string | Date) => (value instanceof Date ? value.toISOString().split('T')[0] : value.split('T')[0]);
+
+const computeTotalPoints = (flags: { exercise: boolean; nutrition: boolean; movement: boolean; meditation: boolean }) =>
+  Number(flags.exercise) + Number(flags.nutrition) + Number(flags.movement) + Number(flags.meditation);
+
+const formatHabitLog = (row: any) => {
+  const exercise = Boolean(row.exercise);
+  const nutrition = Boolean(row.nutrition);
+  const movement = Boolean(row.movement);
+  const meditation = Boolean(row.meditation);
+
+  return {
+    day: isoDate(row.day),
+    steps: row.steps || 0,
+    exercise,
+    nutrition,
+    movement,
+    meditation,
+    total_points: computeTotalPoints({ exercise, nutrition, movement, meditation }),
+  };
+};
+
+const validateDay = (value: string | undefined): Date | null => {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return null;
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return parsed;
+};
+
+const upsertHabitLog = async (
+  userId: string,
+  day: Date,
+  payload: {
+    exercise?: boolean;
+    nutrition?: boolean;
+    movement?: boolean;
+    meditation?: boolean;
+    steps?: number;
+  },
+) => {
+  const existing = await db
+    .selectFrom('habit_logs')
+    .select(['day', 'exercise', 'nutrition', 'movement', 'meditation', 'steps'])
+    .where('user_id', '=', userId)
+    .where('day', '=', day)
+    .executeTakeFirst();
+
+  const now = new Date();
+  const nextExercise = payload.exercise ?? existing?.exercise ?? false;
+  const nextNutrition = payload.nutrition ?? existing?.nutrition ?? false;
+  const nextMovement = payload.movement ?? existing?.movement ?? false;
+  const nextMeditation = payload.meditation ?? existing?.meditation ?? false;
+  const nextSteps = payload.steps ?? existing?.steps ?? 0;
+
+  if (existing) {
+    const updated = await db
+      .updateTable('habit_logs')
+      .set({
+        exercise: nextExercise,
+        nutrition: nextNutrition,
+        movement: nextMovement,
+        meditation: nextMeditation,
+        steps: nextSteps,
+        updated_at: now,
+      })
+      .where('user_id', '=', userId)
+      .where('day', '=', day)
+      .returning(['day', 'exercise', 'nutrition', 'movement', 'meditation', 'steps', 'updated_at'])
+      .executeTakeFirst();
+
+    if (!updated) {
+      throw new Error('Failed to update habit log');
+    }
+
+    return updated;
+  }
+
+  const inserted = await db
+    .insertInto('habit_logs')
+    .values({
+      user_id: userId,
+      day,
+      exercise: nextExercise,
+      nutrition: nextNutrition,
+      movement: nextMovement,
+      meditation: nextMeditation,
+      steps: nextSteps,
+      created_at: now,
+      updated_at: now,
+    })
+    .returning(['day', 'exercise', 'nutrition', 'movement', 'meditation', 'steps', 'updated_at'])
+    .executeTakeFirst();
+
+  if (!inserted) {
+    throw new Error('Failed to create habit log');
+  }
+
+  return inserted;
+};
+
 router.get('/daily-habits/today', authenticateToken, async (req: any, res) => {
   try {
     const userId = req.user.id;
-    const today = new Date().toISOString().split('T')[0];
-    
-    console.log('Fetching today habits for user:', userId, 'date:', today);
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todayDate = new Date(todayStr);
 
-    let todayHabits = await db
-      .selectFrom('daily_habits')
-      .selectAll()
+    console.log('Fetching today habits for user:', userId, 'date:', todayStr);
+
+    let log = await db
+      .selectFrom('habit_logs')
+      .select(['day', 'exercise', 'nutrition', 'movement', 'meditation', 'steps'])
       .where('user_id', '=', userId)
-      .where('date', '=', today)
+      .where('day', '=', todayDate)
       .executeTakeFirst();
 
-    if (!todayHabits) {
-      // Create default record for today
-      todayHabits = await db
-        .insertInto('daily_habits')
+    if (!log) {
+      log = await db
+        .insertInto('habit_logs')
         .values({
           user_id: userId,
-          date: today,
-          training_completed: 0,
-          nutrition_completed: 0,
-          movement_completed: 0,
-          meditation_completed: 0,
-          daily_points: 0,
+          day: todayDate,
+          exercise: false,
+          nutrition: false,
+          movement: false,
+          meditation: false,
           steps: 0,
           created_at: new Date(),
-          updated_at: new Date()
+          updated_at: new Date(),
         })
-        .returning([
-          'id','user_id','date','training_completed','nutrition_completed',
-          'movement_completed','meditation_completed','daily_points','steps',
-          'created_at','updated_at'
-        ])
+        .returning(['day', 'exercise', 'nutrition', 'movement', 'meditation', 'steps'])
         .executeTakeFirst();
     }
 
-    console.log('Today habits fetched:', todayHabits);
-    res.json(todayHabits);
+    if (!log) {
+      throw new Error('Unable to create habit log');
+    }
+
+    res.json(formatHabitLog(log));
   } catch (error) {
     console.error('Error fetching today habits:', error);
     await SystemLogger.logCriticalError('Today habits fetch error', error as Error, { userId: req.user?.id });
@@ -54,35 +155,38 @@ router.get('/daily-habits/today', authenticateToken, async (req: any, res) => {
   }
 });
 
-// Get weekly points for the authenticated user
 router.get('/daily-habits/weekly-points', authenticateToken, async (req: any, res) => {
   try {
     const userId = req.user.id;
     const today = new Date();
     const weekStart = new Date(today);
-    weekStart.setDate(today.getDate() - today.getDay()); // Start of week (Sunday)
-    const weekStartStr = weekStart.toISOString().split('T')[0];
-    
-    console.log('Fetching weekly points for user:', userId, 'from:', weekStartStr);
+    weekStart.setDate(today.getDate() - today.getDay());
 
-    const weeklyData = await db
-      .selectFrom('daily_habits')
-      .select(['date', 'daily_points'])
+    const weeklyLogs = await db
+      .selectFrom('habit_logs')
+      .select(['day', 'exercise', 'nutrition', 'movement', 'meditation'])
       .where('user_id', '=', userId)
-      .where('date', '>=', weekStartStr)
-      .orderBy('date', 'asc')
+      .where('day', '>=', weekStart)
+      .orderBy('day', 'asc')
       .execute();
 
-    const totalPoints = weeklyData.reduce((sum, day) => sum + (day.daily_points || 0), 0);
+    const dailyData = weeklyLogs.map((log) => ({
+      date: isoDate(log.day),
+      daily_points: computeTotalPoints({
+        exercise: Boolean(log.exercise),
+        nutrition: Boolean(log.nutrition),
+        movement: Boolean(log.movement),
+        meditation: Boolean(log.meditation),
+      }),
+    }));
 
-    const result = {
+    const totalPoints = dailyData.reduce((sum, day) => sum + day.daily_points, 0);
+
+    res.json({
       total_points: totalPoints,
-      daily_data: weeklyData,
-      week_start: weekStartStr
-    };
-
-    console.log('Weekly points fetched:', result.total_points);
-    res.json(result);
+      daily_data: dailyData,
+      week_start: weekStart.toISOString().split('T')[0],
+    });
   } catch (error) {
     console.error('Error fetching weekly points:', error);
     await SystemLogger.logCriticalError('Weekly points fetch error', error as Error, { userId: req.user?.id });
@@ -90,27 +194,31 @@ router.get('/daily-habits/weekly-points', authenticateToken, async (req: any, re
   }
 });
 
-// Get calendar data for the authenticated user
 router.get('/daily-habits/calendar', authenticateToken, async (req: any, res) => {
   try {
     const userId = req.user.id;
     const today = new Date();
-    const monthsBack = 3; // Get last 3 months of data
     const startDate = new Date(today);
-    startDate.setMonth(today.getMonth() - monthsBack);
-    const startDateStr = startDate.toISOString().split('T')[0];
-    
-    console.log('Fetching calendar data for user:', userId, 'from:', startDateStr);
+    startDate.setMonth(today.getMonth() - 3);
 
-    const calendarData = await db
-      .selectFrom('daily_habits')
-      .select(['date', 'daily_points'])
+    const logs = await db
+      .selectFrom('habit_logs')
+      .select(['day', 'exercise', 'nutrition', 'movement', 'meditation'])
       .where('user_id', '=', userId)
-      .where('date', '>=', startDateStr)
-      .orderBy('date', 'desc')
+      .where('day', '>=', startDate)
+      .orderBy('day', 'desc')
       .execute();
 
-    console.log('Calendar data fetched:', calendarData.length, 'days');
+    const calendarData = logs.map((log) => ({
+      date: isoDate(log.day),
+      daily_points: computeTotalPoints({
+        exercise: Boolean(log.exercise),
+        nutrition: Boolean(log.nutrition),
+        movement: Boolean(log.movement),
+        meditation: Boolean(log.meditation),
+      }),
+    }));
+
     res.json(calendarData);
   } catch (error) {
     console.error('Error fetching calendar data:', error);
@@ -119,96 +227,36 @@ router.get('/daily-habits/calendar', authenticateToken, async (req: any, res) =>
   }
 });
 
-// Update daily habits
 router.put('/daily-habits/update', authenticateToken, async (req: any, res) => {
   try {
     const userId = req.user.id;
-    const { 
-      date, 
-      training_completed, 
-      nutrition_completed, 
-      movement_completed, 
-      meditation_completed, 
-      steps 
-    } = req.body;
-    
-    console.log('Updating daily habits for user:', userId, 'date:', date, 'data:', req.body);
+    const { day, date, exercise, nutrition, movement, meditation, steps } = req.body as {
+      day?: string;
+      date?: string;
+      exercise?: boolean;
+      nutrition?: boolean;
+      movement?: boolean;
+      meditation?: boolean;
+      steps?: number;
+    };
 
-    if (!date) {
-      sendErrorResponse(res, ERROR_CODES.VALIDATION_ERROR, 'Fecha requerida');
+    const target = validateDay(day ?? date);
+    if (!target) {
+      sendErrorResponse(res, ERROR_CODES.VALIDATION_ERROR, 'Fecha requerida (YYYY-MM-DD)');
       return;
     }
 
-    // Get current record or create new one
-    let currentHabits = await db
-      .selectFrom('daily_habits')
-      .selectAll()
-      .where('user_id', '=', userId)
-      .where('date', '=', date)
-      .executeTakeFirst();
+    console.log('Updating daily habits for user:', userId, 'day:', target.toISOString().split('T')[0], 'data:', req.body);
 
-    const updateData: any = {
-      updated_at: new Date()
-    };
+    const updatedLog = await upsertHabitLog(userId, target, {
+      exercise: exercise !== undefined ? Boolean(exercise) : undefined,
+      nutrition: nutrition !== undefined ? Boolean(nutrition) : undefined,
+      movement: movement !== undefined ? Boolean(movement) : undefined,
+      meditation: meditation !== undefined ? Boolean(meditation) : undefined,
+      steps: steps !== undefined ? Number(steps) : undefined,
+    });
 
-    // Update fields that were provided
-    if (training_completed !== undefined) updateData.training_completed = training_completed ? 1 : 0;
-    if (nutrition_completed !== undefined) updateData.nutrition_completed = nutrition_completed ? 1 : 0;
-    if (movement_completed !== undefined) updateData.movement_completed = movement_completed ? 1 : 0;
-    if (meditation_completed !== undefined) updateData.meditation_completed = meditation_completed ? 1 : 0;
-    if (steps !== undefined) updateData.steps = steps;
-
-    // Calculate points based on completed habits
-    const habitsToCheck = {
-      training_completed: training_completed !== undefined ? (training_completed ? 1 : 0) : (currentHabits?.training_completed || 0),
-      nutrition_completed: nutrition_completed !== undefined ? (nutrition_completed ? 1 : 0) : (currentHabits?.nutrition_completed || 0),
-      movement_completed: movement_completed !== undefined ? (movement_completed ? 1 : 0) : (currentHabits?.movement_completed || 0),
-      meditation_completed: meditation_completed !== undefined ? (meditation_completed ? 1 : 0) : (currentHabits?.meditation_completed || 0)
-    };
-
-    const dailyPoints = Object.values(habitsToCheck).reduce((sum, completed) => sum + completed, 0);
-    updateData.daily_points = dailyPoints;
-
-    let result;
-    if (currentHabits) {
-      // Update existing record
-      result = await db
-        .updateTable('daily_habits')
-        .set(updateData)
-        .where('user_id', '=', userId)
-        .where('date', '=', date)
-        .returning([
-          'id','user_id','date','training_completed','nutrition_completed',
-          'movement_completed','meditation_completed','daily_points','steps',
-          'created_at','updated_at'
-        ])
-        .executeTakeFirst();
-    } else {
-      // Create new record
-      result = await db
-        .insertInto('daily_habits')
-        .values({
-          user_id: userId,
-          date: date,
-          training_completed: updateData.training_completed || 0,
-          nutrition_completed: updateData.nutrition_completed || 0,
-          movement_completed: updateData.movement_completed || 0,
-          meditation_completed: updateData.meditation_completed || 0,
-          daily_points: dailyPoints,
-          steps: updateData.steps || 0,
-          created_at: new Date(),
-          updated_at: new Date()
-        })
-        .returning([
-          'id','user_id','date','training_completed','nutrition_completed',
-          'movement_completed','meditation_completed','daily_points','steps',
-          'created_at','updated_at'
-        ])
-        .executeTakeFirst();
-    }
-
-    console.log('Daily habits updated successfully:', result);
-    res.json(result);
+    res.json(formatHabitLog(updatedLog));
   } catch (error) {
     console.error('Error updating daily habits:', error);
     await SystemLogger.logCriticalError('Daily habits update error', error as Error, { userId: req.user?.id });

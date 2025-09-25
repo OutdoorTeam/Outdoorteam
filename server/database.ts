@@ -1,279 +1,262 @@
-import { Kysely, PostgresDialect, sql } from 'kysely';
+﻿import { Kysely, PostgresDialect, sql } from 'kysely';
+import type { ColumnType, Generated } from 'kysely';
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
+type TimestampColumn = ColumnType<Date, Date | string | undefined, Date | string | undefined>;
+type DateColumn = ColumnType<Date, Date | string | undefined, Date | string | undefined>;
+type JsonColumn = ColumnType<unknown, unknown, unknown>;
+type NumericColumn = ColumnType<string, string | number | undefined, string | number | undefined>;
+
 export interface DatabaseSchema {
-  users: {
-    id: string; // Changed to string for UUID
-    email: string;
-    password_hash: string | null;
-    full_name: string;
-    role: string;
-    plan_type: string | null;
-    is_active: number;
-    features_json: string;
-    created_at: Date;
-    updated_at: Date;
-  };
-  habits: {
-    id: string;
-    user_id: string;
+  admin_roles: {
+    id: Generated<string>;
     name: string;
-    is_completed: number;
-    date: string;
-    created_at: Date;
+    description: string | null;
+    permissions: JsonColumn;
+    created_at: TimestampColumn;
+    updated_at: TimestampColumn;
   };
-  daily_habits: {
-    id: string;
+  admin_users: {
+    id: Generated<string>;
     user_id: string;
-    date: string;
-    training_completed: number;
-    nutrition_completed: number;
-    movement_completed: number;
-    meditation_completed: number;
-    daily_points: number;
-    steps: number;
-    created_at: Date;
-    updated_at: Date;
-  };
-  daily_history: {
-    id: string;
-    user_id: string;
-    date: string;
-    daily_points: number;
-    steps: number;
-    training_completed: number;
-    nutrition_completed: number;
-    movement_completed: number;
-    meditation_completed: number;
-    notes_content: string | null;
-    archived_at: Date;
-  };
-  user_notes: {
-    id: string;
-    user_id: string;
-    content: string;
-    date: string;
-    created_at: Date;
-  };
-  step_counts: {
-    id: string;
-    user_id: string;
-    steps: number;
-    date: string;
-    created_at: Date;
-  };
-  user_files: {
-    id: string;
-    user_id: string;
-    filename: string;
-    file_type: string;
-    file_path: string;
-    uploaded_by: string;
-    created_at: Date;
+    role_id: string;
+    created_at: TimestampColumn;
+    updated_at: TimestampColumn;
   };
   broadcast_messages: {
-    id: string;
-    sender_id: string;
-    message: string;
-    created_at: Date;
+    id: Generated<string>;
+    title: string;
+    body: string;
+    url: string | null;
+    created_at: TimestampColumn;
+    created_by: string | null;
   };
-  plans: {
-    id: string;
-    name: string;
-    description: string;
-    price: number;
-    services_included: string;
-    features_json: string;
-    is_active: number;
-    created_at: Date;
-    updated_at: Date;
+  challenge_progress: {
+    challenge_id: string;
+    user_id: string;
+    progress_count: number;
+    consecutive_days: number;
+    completed: boolean;
+    completed_at: TimestampColumn | null;
+  };
+  challenges: {
+    id: Generated<string>;
+    title: string;
+    type: string;
+    rule: JsonColumn;
+    start_date: DateColumn;
+    end_date: DateColumn;
+    active: boolean;
+    created_by: string | null;
+    created_at: TimestampColumn;
   };
   content_library: {
-    id: string;
+    id: Generated<string>;
     title: string;
     description: string | null;
     video_url: string | null;
-    category: string;
+    category: 'exercise' | 'active_breaks' | 'meditation';
     subcategory: string | null;
-    is_active: number;
-    created_at: Date;
+    is_active: boolean;
+    created_at: TimestampColumn;
+    created_by: string | null;
   };
-  content_videos: {
-    id: string;
-    title: string;
+  database_alerts: {
+    id: Generated<string>;
+    severity: string;
+    message: string;
+    details: JsonColumn | null;
+    resolved: boolean;
+    resolved_at: TimestampColumn | null;
+    resolved_by: string | null;
+    resolution_notes: string | null;
+    created_at: TimestampColumn;
+  };
+  entitlements: {
+    user_id: string;
+    plan: string;
+    active: boolean;
+    stripe_customer_id: string | null;
+    stripe_subscription_id: string | null;
+    updated_at: TimestampColumn;
+  };
+  goals: {
+    user_id: string;
+    week_points_goal: number;
+    daily_steps_goal: number;
+    updated_at: TimestampColumn;
+  };
+  habit_daily_tracking: {
+    id: Generated<string>;
+    user_id: string;
+    date: DateColumn;
+    habits_completed: number;
+    total_points: number;
+    streak_days: number;
+    created_at: TimestampColumn;
+    updated_at: TimestampColumn;
+  };
+  habit_logs: {
+    user_id: string;
+    day: DateColumn;
+    exercise: boolean;
+    nutrition: boolean;
+    meditation: boolean;
+    movement: boolean;
+    steps: number;
+    created_at: TimestampColumn;
+    updated_at: TimestampColumn;
+  };
+  habits: {
+    id: Generated<string>;
+    name: string;
     description: string | null;
+    points: number;
     category: string;
-    video_url: string;
-    is_active: number;
-    created_at: Date;
+    active: boolean;
+    created_at: TimestampColumn;
   };
-  workout_of_day: {
-    id: string;
+  health_evaluations: {
+    id: Generated<string>;
+    user_id: string;
+    created_at: TimestampColumn;
+    updated_at: TimestampColumn;
+    notes: string | null;
+    health_assessment_results: JsonColumn | null;
+  };
+  health_surveys: {
+    id: Generated<string>;
+    user_id: string;
+    submitted_at: TimestampColumn;
+    data: JsonColumn;
+  };
+  logros: {
+    id: Generated<string>;
+    code: string;
     title: string;
     description: string | null;
-    exercises_json: string;
-    date: string;
-    is_active: number;
-    created_at: Date;
-    updated_at: Date;
+    points: number;
+    active: boolean;
   };
-  meditation_sessions: {
-    id: string;
+  notification_settings: {
+    id: Generated<string>;
     user_id: string;
-    duration_minutes: number;
-    meditation_type: string;
-    breathing_cycle_json: string | null;
-    comment: string | null;
-    completed_at: Date;
-  };
-  daily_reset_log: {
-    id: string;
-    reset_date: string;
-    executed_at: Date;
-    users_processed: number;
-    total_daily_points: number;
-    total_steps: number;
-    total_notes: number;
-    status: string;
-    error_message: string | null;
-    execution_time_ms: number;
-    created_at: Date;
-  };
-  system_logs: {
-    id: string;
-    level: string;
-    event: string;
-    user_id: string | null;
-    route: string | null;
-    ip_address: string | null;
-    user_agent: string | null;
-    metadata: string | null;
-    created_at: Date;
-  };
-  user_notifications: {
-    id: string;
-    user_id: string;
-    enabled: number;
-    habits: string;
-    times: string;
-    push_token: string | null;
-    push_endpoint: string | null;
-    push_keys: string | null;
-    created_at: Date;
-    updated_at: Date;
-  };
-  notification_jobs: {
-    id: string;
-    user_id: string;
-    habit_key: string;
-    reminder_time: string;
-    next_send_at: Date;
-    created_at: Date;
+    push_enabled: boolean;
+    email_enabled: boolean;
+    habit_reminders: boolean;
+    habit_reminder_time: string | null;
+    training_reminders: boolean;
+    training_reminder_time: string | null;
+    meditation_reminders: boolean;
+    meditation_reminder_time: string | null;
+    weekly_summary: boolean;
+    device_tokens: JsonColumn;
+    created_at: TimestampColumn;
+    updated_at: TimestampColumn;
   };
   nutrition_plans: {
+    id: Generated<string>;
+    title: string;
+    description: string | null;
+    data: JsonColumn | null;
+    created_at: TimestampColumn;
+  };
+  profiles: {
     id: string;
-    user_id: string;
-    content_md: string | null;
-    version: number;
-    status: string;
-    created_by: string | null;
-    created_at: Date;
-    updated_at: Date;
+    full_name: string | null;
+    nombre: string | null;
+    apellido: string | null;
+    telefono: string | null;
+    direccion: string | null;
+    ciudad: string | null;
+    pais: string | null;
+    codigo_postal: string | null;
+    fecha_nacimiento: DateColumn | null;
+    avatar_url: string | null;
+    biografia: string | null;
+    name: string | null;
+    profile_picture_url: string | null;
+    created_at: TimestampColumn;
+    updated_at: TimestampColumn;
+    sitio_web: string | null;
+  };
+  recompensas: {
+    id: Generated<string>;
+    code: string;
+    name: string;
+    cost_points: number;
+    active: boolean;
+  };
+  subscription_plans: {
+    id: Generated<string>;
+    name: string;
+    price: NumericColumn;
+    description: string | null;
+    features: JsonColumn | null;
+    created_at: TimestampColumn;
   };
   training_plans: {
-    id: string;
-    user_id: string;
-    title: string | null;
-    version: number;
-    status: string;
-    created_by: string | null;
-    created_at: Date;
-    updated_at: Date;
+    id: Generated<string>;
+    slug: string;
+    name: string;
+    level: string | null;
+    goal: string | null;
+    weeks: number | null;
+    created_at: TimestampColumn;
   };
-  training_plan_days: {
-    id: string;
-    plan_id: string;
+  training_programs: {
+    id: Generated<string>;
+    plan_slug: string;
     day_index: number;
-    title: string | null;
-    notes: string | null;
-    sort_order: number;
+    title: string;
+    description: string | null;
+    focus: string | null;
   };
-  training_exercises: {
-    id: string;
-    day_id: string;
-    sort_order: number;
-    exercise_name: string;
-    content_library_id: string | null;
-    youtube_url: string | null;
-    sets: number | null;
-    reps: string | null;
-    intensity: string | null;
-    rest_seconds: number | null;
-    tempo: string | null;
-    notes: string | null;
-  };
-  training_plan_schedules: {
-    id: string;
+  user_plan_assignments: {
     user_id: string;
-    plan_title: string | null;
-    week_number: number;
-    status: string;
-    created_by: string | null;
-    created_at: Date;
-    updated_at: Date;
+    plan_id: string;
+    assigned_at: TimestampColumn;
   };
-  training_plan_exercises: {
-    id: string;
-    schedule_id: string;
-    day_name: string;
-    exercise_name: string;
-    content_library_id: string | null;
-    video_url: string | null;
-    sets: number | null;
-    reps: string | null;
-    rest_seconds: number | null;
-    intensity: string | null;
-    notes: string | null;
-    sort_order: number;
-  };
-  user_permissions: {
-    id: string;
+  user_roles: {
+    id: Generated<string>;
     user_id: string;
-    dashboard_enabled: number;
-    training_enabled: number;
-    nutrition_enabled: number;
-    meditation_enabled: number;
-    active_breaks_enabled: number;
-    exercises_enabled: number;
-    created_at: Date;
-    updated_at: Date;
+    role: string;
+    created_at: TimestampColumn;
   };
-  user_goals: {
+  users: {
     id: string;
-    user_id: string;
-    daily_steps_goal: number;
-    weekly_points_goal: number;
-    created_at: Date;
-    updated_at: Date;
+    email: string;
+    full_name: string | null;
+    name: string | null;
+    profile_picture_url: string | null;
+    subscription_plan_id: string | null;
+    is_admin: boolean;
+    is_active: boolean;
+    created_at: TimestampColumn;
+    puntos: number;
+    pasos: number;
+    ranking_puntos: number | null;
+    ranking_pasos: number | null;
+    has_training_access: boolean;
+    has_nutrition_access: boolean;
+    has_pause_access: boolean;
+    has_meditation_access: boolean;
+    health_assessment_results: JsonColumn | null;
   };
-  user_avatars: {
-    id: string;
-    user_id: string;
-    gender: string;
-    skin_tone: string;
-    hair_style: string;
-    hair_color: string;
-    shirt_style: string;
-    shirt_color: string;
-    pants_style: string;
-    pants_color: string;
-    accessory: string;
-    vitality_level: number;
-    created_at: Date;
-    updated_at: Date;
+  videos: {
+    id: Generated<string>;
+    code: string;
+    title: string;
+    url: string;
+    duration_seconds: number | null;
+    thumbnail_url: string | null;
+  };
+  videos_ejercicios: {
+    video_code: string;
+    exercise_code: string;
   };
 }
 
