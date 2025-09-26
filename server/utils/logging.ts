@@ -65,6 +65,19 @@ export class SystemLogger {
     });
   }
 
+  /** Helper para errores de autenticación */
+  static async logAuthError(
+    message: string,
+    email?: string,
+    req?: any
+  ): Promise<void> {
+    const metadata = email ? { email } : undefined;
+    await this.log('warn', message, {
+      req,
+      metadata,
+    });
+  }
+
   /** Trae últimos logs para dashboards */
   static async getRecent(level?: LogLevel, limit = 100) {
     let q = db!
@@ -84,7 +97,7 @@ export class SystemLogger {
 
     const { numDeletedRows } = await db!
       .deleteFrom('database_alerts')
-      .where('created_at', '<', cutoff.toISOString())
+      .where('created_at', '<', cutoff)
       .executeTakeFirst();
 
     const deleted =
@@ -95,3 +108,5 @@ export class SystemLogger {
     return deleted;
   }
 }
+
+
