@@ -23,3 +23,6 @@ Thumbs.db
 
 # Archivos generados/temporal
 uploads/
+tools/jdk17/
+
+tools/*.zip
