@@ -6,7 +6,7 @@ router.get('/', async (_req, res) => {
   res.json({ items: [] });
 });
 
-router.all('*', (_req, res) => {
+router.all('/*', (_req, res) => {
   res.status(501).json({ message: 'Nutrition plan draft/version workflow not implemented for current schema' });
 });
 
