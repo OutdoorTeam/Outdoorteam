@@ -117,7 +117,7 @@ export function setupStaticServing(app: express.Application) {
   });
 
   // Very permissive catch-all handler for SPA routing
-  app.get('*', (req, res, next) => {
+  app.use((req, res, next) => {
     // Skip API routes
     if (req.path.startsWith('/api/')) {
       return next();
