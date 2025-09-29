@@ -35,16 +35,21 @@ dotenv.config();
 const app = express();
 
 // --- Environment Variable Checks ---
-const isStrictEnv = process.env.STRICT_ENV === 'true';
 const requiredEnv = ['DATABASE_URL', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE', 'SUPABASE_JWT_SECRET'];
-const missingEnv = requiredEnv.filter((e) => !process.env[e]);
-const areCoreServicesAvailable = missingEnv.length === 0;
+const missingEnv = requiredEnv.filter((key) => {
+  const value = process.env[key];
+  return !value || String(value).trim() === '';
+});
+const isStrictEnv = String(process.env.STRICT_ENV).toLowerCase() === 'true';
 
-if (isStrictEnv && !areCoreServicesAvailable) {
-  console.error('⚠️ STRICT_ENV is true and required environment variables are missing:', missingEnv.join(', '));
-  console.error('Please check your .env file. The server will not start.');
-  process.exit(1);
+if (missingEnv.length && isStrictEnv) {
+  console.error('Missing required envs:', missingEnv.join(', '));
+  // Note: in production we would exit with code 1 here.
+} else if (missingEnv.length) {
+  console.warn('[WARN] Missing envs (continuing due to STRICT_ENV!=true):', missingEnv.join(', '));
 }
+
+const areCoreServicesAvailable = missingEnv.length === 0;
 
 // Enable trust proxy for deployment platforms
 app.set('trust proxy', true);

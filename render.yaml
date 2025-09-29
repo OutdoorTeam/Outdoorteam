@@ -13,6 +13,11 @@ services:
       - key: PORT
         value: 3001
       - fromGroup: outdoor-team-env
+    buildEnvVars:
+      - key: VITE_SUPABASE_URL
+        value: "" # Used during client build
+      - key: VITE_SUPABASE_ANON_KEY
+        value: "" # Used during client build
 
 envVarGroups:
   - name: outdoor-team-env

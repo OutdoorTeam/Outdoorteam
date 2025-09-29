@@ -1,9 +1,12 @@
-import path from 'path';
+﻿import path from 'path';
 import express from 'express';
 import fs from 'fs';
 
 export function setupStaticServing(app: express.Application) {
-  const publicPath = path.join(process.cwd(), 'public');
+  const isProd = process.env.NODE_ENV === 'production';
+  const publicPath = isProd
+    ? path.resolve(process.cwd(), 'dist', 'public')
+    : path.resolve(process.cwd(), 'public');
   const indexPath = path.join(publicPath, 'index.html');
   
   console.log('Setting up static serving from:', publicPath);
@@ -114,7 +117,7 @@ export function setupStaticServing(app: express.Application) {
   });
 
   // Very permissive catch-all handler for SPA routing
-  app.get('/*', (req, res, next) => {
+  app.get('/:path(*)', (req, res, next) => {
     // Skip API routes
     if (req.path.startsWith('/api/')) {
       return next();
