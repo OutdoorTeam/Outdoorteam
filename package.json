@@ -8,7 +8,7 @@
     "build:server": "tsc --project tsconfig.server.json",
     "build:web": "vite build",
     "build": "npm run clean && npm run build:web && npm run build:server",
-    "start": "node dist/server/server/index.js",
+    "start": "node dist/server/index.js",
     "start:dev": "tsx watch scripts/dev.ts",
     "generate-vapid": "node scripts/generate-vapid.js",
     "db:migrate": "node scripts/migrate.js",
