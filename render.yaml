@@ -15,9 +15,9 @@ services:
       - fromGroup: outdoor-team-env
     buildEnvVars:
       - key: VITE_SUPABASE_URL
-        value: "" # Used during client build
+        value: "https://jkgbaaqnfycbjylustan.supabase.co"
       - key: VITE_SUPABASE_ANON_KEY
-        value: "" # Used during client build
+        value: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImprZ2JhYXFuZnljYmp5bHVzdGFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgxMTg1MDksImV4cCI6MjA3MzY5NDUwOX0.268tOs3eC9VipN85qwCZzDwMwQsaCt_lYzELjc-POAM"
 
 envVarGroups:
   - name: outdoor-team-env
