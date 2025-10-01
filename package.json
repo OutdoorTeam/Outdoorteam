@@ -13,11 +13,11 @@
     "generate-vapid": "node scripts/generate-vapid.js",
     "db:migrate": "node scripts/migrate.js",
     "db:seed": "node scripts/seed.js",
-    "build:mobile": "CAPACITOR=true vite build && cap sync android",
-    "cap:sync": "cap sync android",
+    "build:mobile": "cross-env CAPACITOR=true vite build && npm run cap:sync",
+    "cap:sync": "npx cap sync android",
     "cap:open": "cap open android",
-    "android:apk:debug": "cd android && ./gradlew assembleDebug",
-    "android:apk:release": "cd android && ./gradlew assembleRelease"
+    "android:apk:debug": "node scripts/run-gradle.js assembleDebug",
+    "android:apk:release": "node scripts/run-gradle.js assembleRelease"
   },
   "engines": {
     "node": ">=18"
@@ -92,6 +92,7 @@
     "tailwindcss": "3.4.17",
     "tsx": "4.19.3",
     "typescript": "5.8.2",
-    "vite": "6.3.1"
+    "vite": "6.3.1",
+    "cross-env": "^7.0.3"
   }
 }

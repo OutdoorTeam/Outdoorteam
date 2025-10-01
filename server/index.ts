@@ -200,7 +200,7 @@ if (areCoreServicesAvailable) {
   app.use('/api', statsRoutes);
   app.use('/api', userStatsRoutes);
   app.use('/api/notifications', notificationRoutes);
-  app.use('/api', nutritionPlanRoutes);
+  app.use('/api/nutrition', nutritionPlanRoutes);
   app.use('/api/training', trainingPlanRoutes);
   app.use('/api/training-schedule', trainingScheduleRoutes);
   app.use('/api/admin', userManagementRoutes);
