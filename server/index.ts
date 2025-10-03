@@ -167,31 +167,21 @@ if (areCoreServicesAvailable) {
     }
   });
 
-  const getUserFeatures = (featuresJson: string) => {
-    try {
-      return JSON.parse(featuresJson || '{}');
-    } catch (error) {
-      console.error('Error parsing features JSON:', error);
-      return {};
-    }
-  };
-
   const formatUserResponse = (user: any) => {
-    const features = getUserFeatures(user.features_json);
     return {
       id: user.id,
       email: user.email,
-      full_name: user.full_name,
-      role: user.role,
-      plan_type: user.plan_type,
+      full_name: user.full_name ?? user.name ?? '',
+      role: user.is_admin ? 'admin' : 'user',
+      plan_type: user.subscription_plan_id,
       created_at: user.created_at,
-      is_active: user.is_active,
+      is_active: Boolean(user.is_active),
       features: {
-        habits: features.habits || false,
-        training: features.training || false,
-        nutrition: features.nutrition || false,
-        meditation: features.meditation || false,
-        active_breaks: features.active_breaks || false,
+        habits: Boolean(user.has_training_access || user.has_nutrition_access || user.has_pause_access || user.has_meditation_access),
+        training: Boolean(user.has_training_access),
+        nutrition: Boolean(user.has_nutrition_access),
+        meditation: Boolean(user.has_meditation_access),
+        active_breaks: Boolean(user.has_pause_access),
       },
     };
   };
@@ -207,11 +197,11 @@ if (areCoreServicesAvailable) {
   app.use('/api/admin', userGoalsRoutes);
   app.use('/api/admin', plansManagementRoutes);
   app.use('/api', dailyHabitsRoutes);
-  app.use('/api', dailyNotesRoutes);
+  app.use('/api/daily-notes', dailyNotesRoutes);
   app.use('/api', myGoalsRoutes);
   app.use('/api', apiRoutes);
   app.use('/api/auth', authRoutes);
-  app.use('/api', avatarRoutes);
+  app.use('/api/avatar', avatarRoutes);
 
   // Endpoint de subida de archivos deshabilitado en este esquema
   app.post('/api/user-files/upload', (_req: Request, res: Response): void => {

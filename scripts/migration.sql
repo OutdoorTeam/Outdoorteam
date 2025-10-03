@@ -3,17 +3,64 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Create all tables for the Outdoor Team application for PostgreSQL
 
+CREATE TABLE IF NOT EXISTS subscription_plans (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL,
+  price NUMERIC NOT NULL,
+  description TEXT,
+  features JSONB,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   email TEXT UNIQUE NOT NULL,
-  password_hash TEXT,
-  full_name TEXT NOT NULL,
-  role TEXT DEFAULT 'user',
-  plan_type TEXT,
-  is_active INTEGER DEFAULT 1,
-  features_json TEXT DEFAULT '{}',
+  full_name TEXT,
+  name TEXT,
+  profile_picture_url TEXT,
+  subscription_plan_id UUID,
+  is_admin BOOLEAN DEFAULT FALSE,
+  is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+  puntos INTEGER DEFAULT 0,
+  pasos INTEGER DEFAULT 0,
+  ranking_puntos INTEGER,
+  ranking_pasos INTEGER,
+  has_training_access BOOLEAN DEFAULT FALSE,
+  has_nutrition_access BOOLEAN DEFAULT FALSE,
+  has_pause_access BOOLEAN DEFAULT FALSE,
+  has_meditation_access BOOLEAN DEFAULT FALSE,
+  health_assessment_results JSONB,
+  CONSTRAINT users_subscription_plan_fk FOREIGN KEY (subscription_plan_id) REFERENCES subscription_plans(id)
+);
+
+CREATE TABLE IF NOT EXISTS profiles (
+  id UUID PRIMARY KEY,
+  full_name TEXT,
+  nombre TEXT,
+  apellido TEXT,
+  telefono TEXT,
+  direccion TEXT,
+  ciudad TEXT,
+  pais TEXT,
+  codigo_postal TEXT,
+  fecha_nacimiento DATE,
+  avatar_url TEXT,
+  biografia TEXT,
+  name TEXT,
+  profile_picture_url TEXT,
+  sitio_web TEXT,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT profiles_user_fk FOREIGN KEY (id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+
+CREATE TABLE IF NOT EXISTS user_plan_assignments (
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  plan_id UUID NOT NULL REFERENCES subscription_plans(id) ON DELETE CASCADE,
+  assigned_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, plan_id)
 );
 
 CREATE TABLE IF NOT EXISTS user_notes (

@@ -71,7 +71,7 @@ export const authenticateToken = async (req: Request, res: Response, next: NextF
 
 // Admin middleware
 export const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
-  if (!req.user || req.user.role !== 'admin') {
+  if (!req.user || !req.user.is_admin) {
     sendErrorResponse(res, ERROR_CODES.AUTHORIZATION_ERROR, 'Access denied. Administrator permissions are required.');
     return;
   }
