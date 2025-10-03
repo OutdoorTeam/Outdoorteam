@@ -263,12 +263,18 @@ export interface DatabaseSchema {
 let dbInstance: Kysely<DatabaseSchema> | null = null;
 
 if (process.env.DATABASE_URL) {
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    max: 5,
+    ssl: { rejectUnauthorized: false },
+  });
+
+  pool.on('error', (err) => {
+    console.error('Unexpected database error:', err);
+  });
+
   const dialect = new PostgresDialect({
-    pool: new Pool({
-      connectionString: process.env.DATABASE_URL,
-      max: 5,
-      ssl: { rejectUnauthorized: false },
-    }),
+    pool,
   });
 
   dbInstance = new Kysely<DatabaseSchema>({
