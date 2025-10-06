@@ -23,6 +23,7 @@ import ProfilePage from '@/pages/ProfilePage';
 import PlanSelectionPage from '@/pages/PlanSelectionPage';
 import ActivitiesPage from '@/pages/ActivitiesPage';
 import TrainingBlocksPage from '@/pages/TrainingBlocksPage';
+import EvaluationsPage from '@/pages/EvaluationsPage';
 
 // Error fallback component
 const PageErrorFallback: React.FC<{ error?: Error, pageName?: string }> = ({ error, pageName }) => (
@@ -93,6 +94,7 @@ const AppRoutes = () => (
     <Route path="/exercises" element={<ProtectedRoute><PageWrapper pageName="Exercises"><ExercisesPage /></PageWrapper></ProtectedRoute>} />
     <Route path="/activities" element={<ProtectedRoute><PageWrapper pageName="Activities"><ActivitiesPage /></PageWrapper></ProtectedRoute>} />
     <Route path="/training-blocks" element={<ProtectedRoute><PageWrapper pageName="Training Blocks"><TrainingBlocksPage /></PageWrapper></ProtectedRoute>} />
+    <Route path="/evaluations" element={<ProtectedRoute><PageWrapper pageName="Evaluations"><EvaluationsPage /></PageWrapper></ProtectedRoute>} />
     <Route path="/profile" element={<ProtectedRoute><PageWrapper pageName="Profile"><ProfilePage /></PageWrapper></ProtectedRoute>} />
 
     {/* Admin routes */}

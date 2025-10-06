@@ -26,6 +26,7 @@ import avatarRoutes from './routes/avatar-routes.js';
 import activitiesRoutes from './routes/activities-routes.js';
 import trainingBlocksRoutes from './routes/training-blocks-routes.js';
 import vitalityRoutes from './routes/vitality-routes.js';
+import evaluationsRoutes from './routes/evaluations-routes.js';
 import { authenticateToken, requireAdmin } from './middleware/auth.js';
 import { ERROR_CODES, sendErrorResponse } from './utils/validation.js';
 import { SystemLogger } from './utils/logging.js';
@@ -208,6 +209,7 @@ if (areCoreServicesAvailable) {
   app.use('/api/activities', authenticateToken, activitiesRoutes);
   app.use('/api/training-blocks', authenticateToken, trainingBlocksRoutes);
   app.use('/api/vitality', authenticateToken, vitalityRoutes);
+  app.use('/api/evaluations', authenticateToken, evaluationsRoutes);
 
   // Endpoint de subida de archivos deshabilitado en este esquema
   app.post('/api/user-files/upload', (_req: Request, res: Response): void => {
