@@ -3,7 +3,7 @@ import { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
   appId: 'com.outdoorteam.app',
   appName: 'Outdoor Team',
-  webDir: 'dist/public',
+  webDir: 'dist',
   server: {
     androidScheme: 'https',
   },

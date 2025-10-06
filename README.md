@@ -68,6 +68,12 @@ Una aplicación web para el seguimiento de hábitos saludables, entrenamiento, n
     ```
     *La primera vez, Capacitor puede pedirte que instales la plataforma Android. Sigue las instrucciones.*
 
+### Guia rapida
+
+- **Build prod (assets locales)**: `npm run build:mobile` genera `dist/` y sincroniza Android usando `capacitor.config.ts` sin `server.url`.
+- **Build dev (live reload)**: `npm run cap:sync:dev` aplica temporalmente `capacitor.config.dev.ts` (usa `server.url`, por defecto `http://10.0.2.2:3000`) y luego revierte el archivo tras ejecutar `npx cap sync android`. Levanta el backend/frontend con `npm run start:dev` antes de usarlo.
+- `CAPACITOR_DEV_SERVER_URL` te permite apuntar el live reload a otra IP o dominio.
+
 3.  **Abrir el proyecto en Android Studio**
     ```bash
     npm run cap:open
@@ -94,8 +100,9 @@ Una aplicación web para el seguimiento de hábitos saludables, entrenamiento, n
 - `npm run build`: Compila el frontend y el backend para producción web.
 - `npm run build:web`: Compila solo el frontend para la web.
 - `npm run build:mobile`: Compila el frontend para móvil y sincroniza con Capacitor.
-- `npm run cap:sync`: Sincroniza los cambios del proyecto web con la plataforma Android.
-- `npm run cap:open`: Abre el proyecto nativo en Android Studio.
+- `npm run cap:sync`: Sincroniza los cambios del proyecto web con la plataforma Android (config prod sin `server.url`).
+- `npm run cap:sync:dev`: Sincroniza usando `capacitor.config.dev.ts` con `server.url` para live reload (revierte al terminar).
+- `npm run cap:open`: Abre el proyecto nativo en Android Studio con la configuracion dev temporal para live reload.
 - `npm run android:apk:debug`: Genera un APK de depuración.
 - `npm run android:apk:release`: Genera un APK de lanzamiento (requiere configuración de firma).
 - `npm run db:migrate`: Aplica las migraciones de la base de datos.

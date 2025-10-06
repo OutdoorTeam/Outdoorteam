@@ -64,7 +64,7 @@ export default defineConfig(({ mode }) => {
     root: path.join(process.cwd(), 'client'),
     base: isCapacitor ? './' : '/',
     build: {
-      outDir: path.join(process.cwd(), 'dist/public'),
+      outDir: path.join(process.cwd(), isCapacitor ? 'dist' : 'dist/public'),
       emptyOutDir: true,
       chunkSizeWarningLimit: 2000,
     },

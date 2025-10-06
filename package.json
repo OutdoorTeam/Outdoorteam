@@ -12,12 +12,14 @@
     "start:dev": "tsx watch scripts/dev.ts",
     "generate-vapid": "node scripts/generate-vapid.js",
     "db:migrate": "node scripts/migrate.js",
+    "db:migrate:v2": "tsx scripts/run-migration-direct.js",
     "db:seed": "node scripts/seed.js",
-    "build:mobile": "cross-env CAPACITOR=true vite build && npm run cap:sync",
-    "cap:sync": "npx cap sync android",
-    "cap:open": "cap open android",
+    "build:mobile": "npm run clean && cross-env CAPACITOR=true vite build && npm run cap:sync",
+    "cap:sync": "node scripts/run-capacitor.js prod sync android",
+    "cap:open": "node scripts/run-capacitor.js dev open android",
     "android:apk:debug": "node scripts/run-gradle.js assembleDebug",
-    "android:apk:release": "node scripts/run-gradle.js assembleRelease"
+    "android:apk:release": "node scripts/run-gradle.js assembleRelease",
+    "cap:sync:dev": "node scripts/run-capacitor.js dev sync android"
   },
   "engines": {
     "node": ">=18"

@@ -10,7 +10,7 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import HomePage from '@/pages/HomePage';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
-import DashboardPage from '@/pages/DashboardPage';
+import DashboardPage from '@/pages/DashboardPageV2';
 import AdminPage from '@/pages/AdminPage';
 import TrainingPage from '@/pages/TrainingPage';
 import NutritionPage from '@/pages/NutritionPage';
@@ -21,6 +21,8 @@ import PlansPage from '@/pages/PlansPage';
 import PlansManagePage from '@/pages/admin/PlansManagementPage';
 import ProfilePage from '@/pages/ProfilePage';
 import PlanSelectionPage from '@/pages/PlanSelectionPage';
+import ActivitiesPage from '@/pages/ActivitiesPage';
+import TrainingBlocksPage from '@/pages/TrainingBlocksPage';
 
 // Error fallback component
 const PageErrorFallback: React.FC<{ error?: Error, pageName?: string }> = ({ error, pageName }) => (
@@ -89,6 +91,8 @@ const AppRoutes = () => (
     <Route path="/meditation" element={<ProtectedRoute><PageWrapper pageName="Meditation"><MeditationPage /></PageWrapper></ProtectedRoute>} />
     <Route path="/active-breaks" element={<ProtectedRoute><PageWrapper pageName="Active Breaks"><ActiveBreaksPage /></PageWrapper></ProtectedRoute>} />
     <Route path="/exercises" element={<ProtectedRoute><PageWrapper pageName="Exercises"><ExercisesPage /></PageWrapper></ProtectedRoute>} />
+    <Route path="/activities" element={<ProtectedRoute><PageWrapper pageName="Activities"><ActivitiesPage /></PageWrapper></ProtectedRoute>} />
+    <Route path="/training-blocks" element={<ProtectedRoute><PageWrapper pageName="Training Blocks"><TrainingBlocksPage /></PageWrapper></ProtectedRoute>} />
     <Route path="/profile" element={<ProtectedRoute><PageWrapper pageName="Profile"><ProfilePage /></PageWrapper></ProtectedRoute>} />
 
     {/* Admin routes */}
