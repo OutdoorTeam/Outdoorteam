@@ -1,4 +1,4 @@
-﻿import express from 'express';
+import express from 'express';
 import type { Request, Response } from 'express';
 import dotenv from 'dotenv';
 import multer from 'multer';
@@ -37,6 +37,9 @@ import { supabaseAdmin } from './supabase.js'; // (se usa indirectamente en auth
 dotenv.config();
 
 const app = express();
+const isVercel = Boolean(process.env.VERCEL);
+const useStaticServing = process.env.NODE_ENV === 'production' && !isVercel;
+const shouldEnableSchedulers = process.env.ENABLE_SCHEDULERS === 'true' && !isVercel;
 
 // --- Environment Variable Checks ---
 const requiredEnv = ['DATABASE_URL', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE', 'SUPABASE_JWT_SECRET'];
@@ -75,14 +78,18 @@ const checkVapidConfiguration = () => {
       VAPID_PUBLIC_KEY.length >= 32);
 
   if (isConfigured) {
-    console.log('✅ VAPID keys are configured correctly');
+    console.log('? VAPID keys are configured correctly');
   }
   return isConfigured;
 };
 
-const uploadsDir = path.join(process.cwd(), 'uploads');
+const uploadsDir = isVercel ? path.join('/tmp', 'uploads') : path.join(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+  try {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  } catch (error) {
+    console.warn('Unable to prepare uploads directory:', error);
+  }
 }
 
 const storage = multer.memoryStorage();
@@ -223,16 +230,18 @@ if (areCoreServicesAvailable) {
     res.json(formatUserResponse(req.user));
   });
 } else {
-  console.warn('⚠️ Core services are unavailable due to missing environment variables. API endpoints are disabled.');
+  console.warn('?? Core services are unavailable due to missing environment variables. API endpoints are disabled.');
   app.use('/api', (_req, res) => {
     sendErrorResponse(res, ERROR_CODES.SERVER_ERROR, 'Server is not configured. Please check environment variables.');
   });
 }
 
 // Setup static serving for production
-if (process.env.NODE_ENV === 'production') {
+if (useStaticServing) {
   setupStaticServing(app);
-  console.log('🚀 Static file serving configured for production');
+  console.log('?? Static file serving configured for production');
+} else if (process.env.NODE_ENV === 'production') {
+  console.log('?? Static file serving skipped (handled by frontend hosting platform).');
 }
 
 // 404 Handler
@@ -242,13 +251,18 @@ app.use((req, res, _next) => {
     return;
   }
 
-  if (process.env.NODE_ENV === 'production') {
+  if (useStaticServing) {
     const indexPath = path.join(process.cwd(), 'dist/public', 'index.html');
     if (fs.existsSync(indexPath)) {
       res.sendFile(indexPath);
     } else {
       res.status(404).json({ error: 'App not built. Missing index.html' });
     }
+    return;
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    res.status(404).json({ error: 'Route not found' });
     return;
   }
 
@@ -265,59 +279,70 @@ app.use((error: any, _req: express.Request, res: express.Response, next: express
 });
 
 export const startServer = async (port = 3001) => {
+  let vapidConfigured = false;
+
   try {
-    console.log('🛠️ Starting server initialization...');
-    console.log('🌍 Environment:', process.env.NODE_ENV || 'development');
-    console.log('📂 Current working directory:', process.cwd());
+    console.log('??? Starting server initialization...');
+    console.log('?? Environment:', process.env.NODE_ENV || 'development');
+    console.log('?? Current working directory:', process.cwd());
 
     if (areCoreServicesAvailable) {
-      console.log('🔌 Testing database connection...');
+      console.log('?? Testing database connection...');
       await db!.selectFrom('users').select('id').limit(1).execute();
-      console.log('✅ Database connection established');
+      console.log('? Database connection established');
 
-      if (process.env.ENABLE_SCHEDULERS === 'true') {
-        console.log('⏰ Initializing daily reset scheduler...');
+      if (shouldEnableSchedulers) {
+        console.log('? Initializing daily reset scheduler...');
         resetScheduler = new DailyResetScheduler(db);
         await resetScheduler.initialize();
+      } else if (process.env.ENABLE_SCHEDULERS === 'true') {
+        console.log('??  Schedulers are disabled in serverless runtimes (ENABLE_SCHEDULERS ignored on Vercel).');
       } else {
-        console.log('🛑 Schedulers are disabled (ENABLE_SCHEDULERS is not true).');
+        console.log('?? Schedulers are disabled (ENABLE_SCHEDULERS is not true).');
       }
 
-      const vapidConfigured = checkVapidConfiguration();
-      console.log('🔔 Initializing notification scheduler...');
-      notificationScheduler = new NotificationScheduler();
+      vapidConfigured = checkVapidConfiguration();
+
+      if (!isVercel) {
+        console.log('?? Initializing notification scheduler...');
+        notificationScheduler = new NotificationScheduler();
+      } else {
+        console.log('?? Notification scheduler skipped in serverless runtimes.');
+      }
     } else {
-      console.warn('⚠️ Database and core services are not available. Server will run in a limited mode.');
+      console.warn('?? Database and core services are not available. Server will run in a limited mode.');
     }
 
     const server = app.listen(port, '0.0.0.0', () => {
-      console.log(`🚀 Server running on port ${port}`);
+      console.log(`?? Server running on port ${port}`);
       logCorsConfig();
 
       if (notificationScheduler?.isVapidConfigured()) {
-        console.log('🔔 Push notifications: Ready');
+        console.log('?? Push notifications: Ready');
+      } else if (vapidConfigured && isVercel) {
+        console.log('??  Push notifications: VAPID configured but background scheduler disabled in serverless runtime.');
       } else {
-        console.log('🔕 Push notifications: Disabled (VAPID keys not configured)');
+        console.log('? Push notifications: Disabled (VAPID keys not configured)');
       }
 
-      console.log('✅ Server startup completed successfully');
+      console.log('? Server startup completed successfully');
     });
 
     const gracefulShutdown = async (signal: string) => {
-      console.log(`\n⚠️ ${signal} received. Starting graceful shutdown...`);
+      console.log(`\n?? ${signal} received. Starting graceful shutdown...`);
 
       server.close(async () => {
-        console.log('🛑 HTTP server closed');
+        console.log('?? HTTP server closed');
         if (resetScheduler) resetScheduler.stop();
         if (db) {
           try {
             await db.destroy();
-            console.log('✅ Database connection closed');
+            console.log('? Database connection closed');
           } catch (e) {
             console.error('Error closing database connection:', e);
           }
         }
-        console.log('👋 Graceful shutdown complete');
+        console.log('?? Graceful shutdown complete');
         process.exit(0);
       });
     };
@@ -327,12 +352,12 @@ export const startServer = async (port = 3001) => {
 
     return server;
   } catch (error) {
-    console.error('🚨 Failed to start server:', error);
+    console.error('?? Failed to start server:', error);
     process.exit(1);
   }
 };
 
-// ▶️ Guard de ejecución (CommonJS)
+// ?? Guard de ejecuci�n (CommonJS)
 declare const require: NodeRequire; // para TS
 declare const module: NodeModule;
 
@@ -342,3 +367,5 @@ if (typeof require !== 'undefined' && require.main === module) {
 }
 
 export default app;
+
+

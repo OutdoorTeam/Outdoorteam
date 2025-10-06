@@ -57,6 +57,7 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './client/src'),
+        '@shared': path.resolve(__dirname, './shared'),
         // Add alias for shared folder
         '~shared': path.resolve(__dirname, './shared'),
       },
@@ -98,3 +99,6 @@ export default defineConfig(({ mode }) => {
     },
   };
 });
+
+
+

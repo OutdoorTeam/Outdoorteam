@@ -115,6 +115,44 @@ Una aplicación web para el seguimiento de hábitos saludables, entrenamiento, n
 - **Notificaciones Push**: Las notificaciones push para la web (VAPID) no funcionan en la app nativa. Para notificaciones push en Android, necesitarás integrar un servicio como Firebase Cloud Messaging (FCM) y el plugin de Capacitor para Push Notifications.
 - **CORS**: El backend debe permitir peticiones desde `capacitor://localhost` para que la app Android pueda comunicarse con la API.
 
-## 🚀 Despliegue en Producción (Web - Ej. Render)
+## 🚀 Despliegue en Producción
 
-Puedes usar el archivo `render.yaml` incluido para desplegar la versión web en [Render](https://render.com/).
+### Opción 1: Vercel (Recomendado) ⚡
+
+**[Ver guía completa de despliegue en Vercel →](VERCEL_DEPLOYMENT.md)**
+
+#### Configuración Rápida:
+
+1. **Instalar CLI de Vercel** (opcional):
+   ```bash
+   npm i -g vercel
+   ```
+
+2. **Deploy desde VS Code**:
+   - Usar extensión de Vercel
+   - Command Palette → `Vercel: Deploy Current Project`
+
+3. **Configurar Variables de Entorno** en Vercel Dashboard:
+   - `DATABASE_URL` (PostgreSQL de Supabase)
+   - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE`, `SUPABASE_JWT_SECRET`
+   - `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
+   - `VITE_API_BASE_URL` (tu URL de Vercel)
+   - `CORS_ORIGIN` (incluir dominio de Vercel)
+
+4. **Build automático**: `npm run build:web` → `dist/public`
+
+#### Arquitectura Vercel:
+- **Frontend**: Static hosting (Vite)
+- **Backend**: Serverless functions (`api/[[...path]].ts`)
+- **Base de datos**: Supabase (PostgreSQL con pooler)
+- **Autenticación**: Supabase Auth
+
+#### Notas Importantes:
+- ⚠️ Los schedulers están deshabilitados en Vercel (usar cron jobs externos o Edge Functions de Supabase)
+- ✅ CORS configurado para `capacitor://localhost` y dominios de Vercel
+- ✅ Archivos temporales usan `/tmp` en Vercel
+- ✅ La API Express funciona como serverless function
+
+### Opción 2: Render
+
+Puedes usar el archivo `render.yaml` incluido para desplegar en [Render](https://render.com/).
